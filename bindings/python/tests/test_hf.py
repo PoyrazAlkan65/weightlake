@@ -11,8 +11,8 @@ import numpy as np
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import weightdb  # noqa: E402
-import weightdb.hf as whf  # noqa: E402
+import weightlake  # noqa: E402
+import weightlake.hf as whf  # noqa: E402
 from transformers import AutoModelForCausalLM, AutoTokenizer  # noqa: E402
 
 
@@ -27,11 +27,11 @@ def main():
     torch.manual_seed(0)
     ref = AutoModelForCausalLM.from_pretrained(src)
     tok = AutoTokenizer.from_pretrained(src)
-    ids = tok("WeightDB stores weights as data, not files.", return_tensors="pt").input_ids
+    ids = tok("WeightLake stores weights as data, not files.", return_tensors="pt").input_ids
     ref_logits = logits(ref, ids)
 
     with tempfile.TemporaryDirectory() as tmp:
-        db = weightdb.open(Path(tmp) / "repo", create=True)
+        db = weightlake.open(Path(tmp) / "repo", create=True)
 
         # 1) directory import -> transformers model, weights straight from the DB
         db.import_model(src, message="hub files")
@@ -100,7 +100,7 @@ def main():
             try:
                 db.commit_state_dict(bad, branch="misc")
                 raise AssertionError("expected error")
-            except (TypeError, weightdb.WeightDBError) as e:
+            except (TypeError, weightlake.WeightLakeError) as e:
                 print("   expected error:", e)
         print("5 commit_state_dict edge cases ok")
 

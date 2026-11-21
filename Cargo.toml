@@ -1,13 +1,13 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/wdb-core",
-    "crates/wdb-store",
-    "crates/wdb-version",
-    "crates/wdb-io",
-    "crates/wdb-query",
-    "crates/weightdb",
-    "crates/wdb-cli",
+    "crates/wl-core",
+    "crates/wl-store",
+    "crates/wl-version",
+    "crates/wl-io",
+    "crates/wl-query",
+    "crates/weightlake",
+    "crates/wl-cli",
     "bindings/c",
     "bindings/python",
     "bindings/node",
@@ -19,12 +19,12 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
-wdb-core = { path = "crates/wdb-core" }
-wdb-store = { path = "crates/wdb-store" }
-wdb-version = { path = "crates/wdb-version" }
-wdb-io = { path = "crates/wdb-io" }
-wdb-query = { path = "crates/wdb-query" }
-weightdb = { path = "crates/weightdb" }
+wl-core = { path = "crates/wl-core" }
+wl-store = { path = "crates/wl-store" }
+wl-version = { path = "crates/wl-version" }
+wl-io = { path = "crates/wl-io" }
+wl-query = { path = "crates/wl-query" }
+weightlake = { path = "crates/weightlake" }
 
 anyhow = "1"
 blake3 = "1"

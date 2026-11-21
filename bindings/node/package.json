@@ -1,10 +1,10 @@
 {
-  "name": "weightdb",
+  "name": "weightlake",
   "version": "0.1.0",
   "description": "An embedded database for neural network weights",
   "main": "index.js",
   "types": "index.d.ts",
-  "files": ["index.js", "index.d.ts", "weightdb.node"],
+  "files": ["index.js", "index.d.ts", "weightlake.node"],
   "license": "MIT OR Apache-2.0",
   "engines": { "node": ">=18" },
   "scripts": {

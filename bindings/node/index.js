@@ -1,16 +1,16 @@
 'use strict';
 /**
- * WeightDB — an embedded database for neural network weights (Node.js).
+ * WeightLake — an embedded database for neural network weights (Node.js).
  *
- *   const weightdb = require('weightdb');
- *   const db = weightdb.open('repo', { create: true });
+ *   const weightlake = require('weightlake');
+ *   const db = weightlake.open('repo', { create: true });
  *   db.importModel('models/gpt2', { message: 'gpt2 base' });
  *   const t = db.readTensor('h.0.attn.c_attn.weight');   // { data: Float32Array, shape, dtype }
  *   db.sql("SELECT name, l2 FROM tensors WHERE commit_id = rev('main') LIMIT 5");
  */
 const path = require('path');
 
-const native = require(process.env.WEIGHTDB_NATIVE || path.join(__dirname, 'weightdb.node'));
+const native = require(process.env.WEIGHTLAKE_NATIVE || path.join(__dirname, 'weightlake.node'));
 
 // dtype -> [TypedArray constructor, element size]
 const TYPED = {

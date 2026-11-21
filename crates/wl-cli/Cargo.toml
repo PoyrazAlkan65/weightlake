@@ -1,0 +1,17 @@
+[package]
+name = "wl-cli"
+description = "WeightLake command line tool"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "wlake"
+path = "src/main.rs"
+
+[dependencies]
+weightlake.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true

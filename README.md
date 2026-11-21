@@ -1,15 +1,15 @@
-# WeightDB
+# WeightLake
 
-**An embedded database for neural network weights.** WeightDB stores model weights as *data* instead of opaque files.
+**An embedded database for neural network weights.** WeightLake stores model weights as *data* instead of opaque files.
 Models are versioned like Git (commits, branches, diffs), deduplicated and delta-compressed across versions, and queryable with SQL down to a single weight.
 The core is written in Rust, with native APIs for **Rust, C/C++, Python and JavaScript**.
 
 > 🇹🇷 Türkçe: [README.tr.md](README.tr.md)
 
 ```python
-import weightdb, weightdb.hf as whf
+import weightlake, weightlake.hf as whf
 
-db = weightdb.open("repo", create=True)
+db = weightlake.open("repo", create=True)
 whf.save_pretrained(db, model, tokenizer=tok, message="base")              # model -> version, no files
 # ... fine-tune ...
 whf.save_pretrained(db, model, branch="ft", base="main", message="ep 1")   # only changed chunks stored, as XOR deltas
@@ -51,7 +51,7 @@ Model checkpoints are usually handled as big binary files.
 Ten fine-tunes of a 7B model are ten copies of ~14 GB, even when most layers did not change.
 Answering "which layers moved the most?" means loading every checkpoint into a framework.
 
-WeightDB treats a checkpoint as structured data:
+WeightLake treats a checkpoint as structured data:
 
 - **Store each byte once.** Weights are split into content-addressed chunks. A layer that is unchanged in 50 versions is stored once.
 - **Store changes as deltas.** A changed chunk is XOR'ed against the same chunk in the base version and compressed. Fine-tuned weights share most sign, exponent and high mantissa bits with their base, so the XOR is mostly zeros.
@@ -63,7 +63,7 @@ WeightDB treats a checkpoint as structured data:
 
 If you know MongoDB or Git, this mapping covers most of it:
 
-| MongoDB    | Git        | WeightDB   | What it is |
+| MongoDB    | Git        | WeightLake   | What it is |
 |------------|------------|------------|------------|
 | Database   | Repository | **Repo**   | A directory holding one model family and all its versions |
 | Collection | —          | **Tensor** | One weight matrix, e.g. `h.0.attn.c_attn.weight` |
@@ -108,10 +108,10 @@ Treat the numbers above as a smoke test, not a benchmark.
 
 ## Getting started
 
-WeightDB is not published to crates.io, PyPI or npm yet. Build it from source (see [Building from source](#building-from-source)):
+WeightLake is not published to crates.io, PyPI or npm yet. Build it from source (see [Building from source](#building-from-source)):
 
 ```sh
-git clone https://github.com/PoyrazAlkan65/weightdb && cd weightdb
+git clone https://github.com/PoyrazAlkan65/weightlake && cd weightlake
 cargo build --release --workspace
 scripts/build-bindings.sh          # puts the .pyd/.so, .node and C library next to their packages
 ```
@@ -119,9 +119,9 @@ scripts/build-bindings.sh          # puts the .pyd/.so, .node and C library next
 Then:
 
 ```sh
-./target/release/wdb -R repo init
-./target/release/wdb -R repo import path/to/hf-model-dir -m "base"
-./target/release/wdb -R repo ls main
+./target/release/wlake -R repo init
+./target/release/wlake -R repo import path/to/hf-model-dir -m "base"
+./target/release/wlake -R repo ls main
 ```
 
 To use the Python package from the checkout, put `bindings/python` on `PYTHONPATH`, or build a wheel with `maturin build -m bindings/python/Cargo.toml --release`.
@@ -130,7 +130,7 @@ For Node, `require('./bindings/node')`.
 ## CLI
 
 ```
-wdb [-R <repo>] [--json] <command>
+wlake [-R <repo>] [--json] <command>
 ```
 
 `-R` selects the repository directory (default: current directory). `--json` prints machine-readable output for every command.
@@ -151,26 +151,26 @@ wdb [-R <repo>] [--json] <command>
 | `gc [--dry-run]` | Delete versions not reachable from any branch, compact pack files |
 
 ```sh
-wdb -R repo init
-wdb -R repo import ./gpt2 -m "gpt2 base"
-wdb -R repo import ./gpt2-ft -b ft --base main -m "fine-tune"   # deltas against main
-wdb -R repo log ft
-wdb -R repo ls main --role attention
-wdb -R repo show main h.0.attn.c_attn.weight
-wdb -R repo get main h.0.attn.c_attn.weight 0 1 2
-wdb -R repo diff main ft --numeric
-wdb -R repo sql "SELECT role, count(*), sum(nbytes) FROM tensors WHERE commit_id = rev('main') GROUP BY role"
-wdb -R repo stats
-wdb -R repo branch -d ft && wdb -R repo gc
-wdb -R repo export main ./out
+wlake -R repo init
+wlake -R repo import ./gpt2 -m "gpt2 base"
+wlake -R repo import ./gpt2-ft -b ft --base main -m "fine-tune"   # deltas against main
+wlake -R repo log ft
+wlake -R repo ls main --role attention
+wlake -R repo show main h.0.attn.c_attn.weight
+wlake -R repo get main h.0.attn.c_attn.weight 0 1 2
+wlake -R repo diff main ft --numeric
+wlake -R repo sql "SELECT role, count(*), sum(nbytes) FROM tensors WHERE commit_id = rev('main') GROUP BY role"
+wlake -R repo stats
+wlake -R repo branch -d ft && wlake -R repo gc
+wlake -R repo export main ./out
 ```
 
 ## Python
 
 ```python
-import weightdb
+import weightlake
 
-db = weightdb.open("repo", create=True)          # or weightdb.init("repo")
+db = weightlake.open("repo", create=True)          # or weightlake.init("repo")
 
 # versions
 r = db.import_model("gpt2", message="base")       # file or directory; returns the import report
@@ -205,18 +205,18 @@ db.stats(); db.gc(dry_run=True)
 GPU or non-contiguous tensors are first copied to contiguous CPU memory, and big-endian numpy arrays are converted to little-endian.
 The Rust core reads the buffers in place and releases the GIL while it hashes and compresses.
 
-Errors are raised as `weightdb.WeightDBError` (a `RuntimeError`).
+Errors are raised as `weightlake.WeightLakeError` (a `RuntimeError`).
 
 ### Hugging Face transformers
 
-`weightdb.hf` moves weights between a `transformers` model in RAM and the database directly. No `.safetensors` file is written.
+`weightlake.hf` moves weights between a `transformers` model in RAM and the database directly. No `.safetensors` file is written.
 Only the small side files (`config.json`, tokenizer files) go through a temporary directory, because transformers reads those from a path.
 
 ```python
-import torch, weightdb, weightdb.hf as whf
+import torch, weightlake, weightlake.hf as whf
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-db = weightdb.open("repo", create=True)
+db = weightlake.open("repo", create=True)
 
 model = AutoModelForCausalLM.from_pretrained("gpt2")
 tok = AutoTokenizer.from_pretrained("gpt2")
@@ -241,7 +241,7 @@ Things to know:
 ## Rust
 
 ```rust
-use weightdb::{Database, ImportOptions, MemTensor, DType};
+use weightlake::{Database, ImportOptions, MemTensor, DType};
 
 let db = Database::open_or_init("repo")?;
 let r = db.import("gpt2", &ImportOptions { message: "base".into(), ..Default::default() })?;
@@ -281,46 +281,46 @@ db.import_tensors(
 
 ## C and C++
 
-Link against `weightdb.dll` / `libweightdb.so` / `libweightdb.dylib`, and include `bindings/c/include/weightdb.h` (C) or `weightdb.hpp` (C++17, header-only RAII wrapper).
+Link against `weightlake.dll` / `libweightlake.so` / `libweightlake.dylib`, and include `bindings/c/include/weightlake.h` (C) or `weightlake.hpp` (C++17, header-only RAII wrapper).
 
 ```c
-#include "weightdb.h"
+#include "weightlake.h"
 
-wdb_db* db;
-if (wdb_open_or_init("repo", &db) != 0) { fprintf(stderr, "%s\n", wdb_last_error()); return 1; }
+wl_db* db;
+if (wl_open_or_init("repo", &db) != 0) { fprintf(stderr, "%s\n", wl_last_error()); return 1; }
 
-wdb_tensor_info_t info;
-wdb_tensor_info(db, "main", "h.0.attn.c_attn.weight", &info);
+wl_tensor_info_t info;
+wl_tensor_info(db, "main", "h.0.attn.c_attn.weight", &info);
 float* buf = malloc(info.nbytes);
-wdb_read_tensor(db, "main", "h.0.attn.c_attn.weight", buf, info.nbytes);
+wl_read_tensor(db, "main", "h.0.attn.c_attn.weight", buf, info.nbytes);
 
 char* json;
-wdb_sql_json(db, "SELECT name, l2 FROM tensors WHERE commit_id = rev('main')", &json);
+wl_sql_json(db, "SELECT name, l2 FROM tensors WHERE commit_id = rev('main')", &json);
 puts(json);
-wdb_string_free(json);
-wdb_close(db);
+wl_string_free(json);
+wl_close(db);
 ```
 
-Every function returns `0` on success and `-1` on error. `wdb_last_error()` gives the message for the current thread.
-Strings returned through `char**` must be freed with `wdb_string_free`.
-Available functions: `wdb_open/init/open_or_init/close`, `wdb_import`, `wdb_export`, `wdb_resolve`, `wdb_log_json`, `wdb_branches_json`, `wdb_create_branch`, `wdb_delete_branch`, `wdb_tensors_json`, `wdb_tensor_info(_json)`, `wdb_read_tensor`, `wdb_read_weight`, `wdb_diff_json`, `wdb_sql_json`, `wdb_sql_pretty`, `wdb_stats_json`, `wdb_gc_json`, `wdb_version`.
+Every function returns `0` on success and `-1` on error. `wl_last_error()` gives the message for the current thread.
+Strings returned through `char**` must be freed with `wl_string_free`.
+Available functions: `wl_open/init/open_or_init/close`, `wl_import`, `wl_export`, `wl_resolve`, `wl_log_json`, `wl_branches_json`, `wl_create_branch`, `wl_delete_branch`, `wl_tensors_json`, `wl_tensor_info(_json)`, `wl_read_tensor`, `wl_read_weight`, `wl_diff_json`, `wl_sql_json`, `wl_sql_pretty`, `wl_stats_json`, `wl_gc_json`, `wl_version`.
 
 ```cpp
-#include "weightdb.hpp"
+#include "weightlake.hpp"
 
-auto db = weightdb::Database::open("repo");
+auto db = weightlake::Database::open("repo");
 std::vector<float> w = db.read_tensor<float>("main", "h.0.attn.c_attn.weight");
 std::cout << db.sql_pretty("SELECT role, count(*) FROM tensors GROUP BY role");
 ```
 
-The C++ wrapper throws `weightdb::Error` on failure. A full example is in `bindings/c/examples/example.cpp`.
+The C++ wrapper throws `weightlake::Error` on failure. A full example is in `bindings/c/examples/example.cpp`.
 
 ## JavaScript / TypeScript
 
 ```js
-const weightdb = require('weightdb');            // or require('./bindings/node')
+const weightlake = require('weightlake');            // or require('./bindings/node')
 
-const db = weightdb.open('repo', { create: true });
+const db = weightlake.open('repo', { create: true });
 db.importModel('gpt2', { message: 'base' });
 db.importModel('gpt2-ft', { branch: 'ft', base: 'main', message: 'ft' });
 
@@ -453,16 +453,16 @@ A repository is meant to be opened by **one process at a time**. Within that pro
 ## Repository layout
 
 ```
-crates/wdb-core      dtypes, ChunkHash, row-aligned chunking, statistics, manifest/commit types
-crates/wdb-store     pack files (mmap) + redb catalog, codecs (raw / zstd / xor-zstd), gc
-crates/wdb-version   log, structural and numeric diff, tensor statistics
-crates/wdb-io        safetensors import/export, in-memory import, side files
-crates/wdb-query     SQL engine (DataFusion table providers + UDFs)
-crates/weightdb      public Rust API: every binding is built on this crate
-crates/wdb-cli       the `wdb` command
-bindings/c           C ABI (cdylib/staticlib) + include/weightdb.h + include/weightdb.hpp
-bindings/python      PyO3 module `weightdb._native` + `weightdb` package (numpy/torch/pandas, `weightdb.hf`)
-bindings/node        napi-rs addon + `weightdb` npm package (TypedArrays, TypeScript types)
+crates/wl-core      dtypes, ChunkHash, row-aligned chunking, statistics, manifest/commit types
+crates/wl-store     pack files (mmap) + redb catalog, codecs (raw / zstd / xor-zstd), gc
+crates/wl-version   log, structural and numeric diff, tensor statistics
+crates/wl-io        safetensors import/export, in-memory import, side files
+crates/wl-query     SQL engine (DataFusion table providers + UDFs)
+crates/weightlake      public Rust API: every binding is built on this crate
+crates/wl-cli       the `wlake` command
+bindings/c           C ABI (cdylib/staticlib) + include/weightlake.h + include/weightlake.hpp
+bindings/python      PyO3 module `weightlake._native` + `weightlake` package (numpy/torch/pandas, `weightlake.hf`)
+bindings/node        napi-rs addon + `weightlake` npm package (TypedArrays, TypeScript types)
 scripts/             build-bindings.sh, gen-libnode.sh
 ```
 
@@ -473,13 +473,13 @@ Requirements: Rust (stable, 2021 edition). For the Python binding, Python ≥ 3.
 ```sh
 cargo build --release --workspace     # thin LTO: a release build takes several minutes
 scripts/build-bindings.sh             # builds and copies artifacts:
-                                      #   bindings/python/weightdb/_native.{pyd,so}
-                                      #   bindings/node/weightdb.node
+                                      #   bindings/python/weightlake/_native.{pyd,so}
+                                      #   bindings/node/weightlake.node
                                       #   dist/c/{include,lib}
 ```
 
 **Python wheel:** `pip install maturin && maturin build -m bindings/python/Cargo.toml --release`
-Optional extras: `torch`, `pandas`. `transformers` is needed only for `weightdb.hf`.
+Optional extras: `torch`, `pandas`. `transformers` is needed only for `weightlake.hf`.
 
 **Windows notes.** The project was developed on Windows with the **GNU toolchain** (`stable-x86_64-pc-windows-gnu`) and MinGW-w64 (WinLibs) on `PATH`:
 
@@ -498,7 +498,7 @@ Linux and macOS have not been tested yet, but the code has no platform-specific 
 cargo test --workspace                                         # Rust unit + integration tests
 
 # Python (needs numpy; second argument optional)
-python bindings/python/tests/test_weightdb.py <model_dir> [<finetuned_model_dir>]
+python bindings/python/tests/test_weightlake.py <model_dir> [<finetuned_model_dir>]
 
 # Hugging Face integration (needs torch + transformers)
 python bindings/python/tests/test_hf.py <hf_model_dir>
@@ -510,7 +510,7 @@ node bindings/node/test.js <model_dir>
 #   compile bindings/c/examples/example.cpp against dist/c and run it on a repo
 ```
 
-The Python and HF tests check bit-exact tensor equality against the source files, and identical logits for models loaded from WeightDB.
+The Python and HF tests check bit-exact tensor equality against the source files, and identical logits for models loaded from WeightLake.
 They also check delta/dedup behaviour, diffs, export round-trips and dtype edge cases (BF16, big-endian, non-contiguous, empty, bool).
 
 ## Limitations

@@ -1,4 +1,4 @@
-//! Native layer of the `weightdb` Node.js package. Structured results cross as
+//! Native layer of the `weightlake` Node.js package. Structured results cross as
 //! JSON strings, tensor data as a Buffer; `index.js` builds the friendly API.
 
 use napi::bindgen_prelude::Buffer;
@@ -32,20 +32,20 @@ pub fn version() -> String {
 
 #[napi]
 pub struct NativeDatabase {
-    db: wdb::Database,
+    db: wl::Database,
 }
 
 #[napi]
 impl NativeDatabase {
     #[napi(factory)]
     pub fn open(path: String, create: Option<bool>) -> Result<Self> {
-        let db = if create.unwrap_or(false) { wdb::Database::open_or_init(&path) } else { wdb::Database::open(&path) };
+        let db = if create.unwrap_or(false) { wl::Database::open_or_init(&path) } else { wl::Database::open(&path) };
         Ok(NativeDatabase { db: db.js()? })
     }
 
     #[napi(factory)]
     pub fn init(path: String) -> Result<Self> {
-        Ok(NativeDatabase { db: wdb::Database::init(&path).js()? })
+        Ok(NativeDatabase { db: wl::Database::init(&path).js()? })
     }
 
     #[napi]
@@ -55,9 +55,9 @@ impl NativeDatabase {
 
     #[napi]
     pub fn import_model(&self, path: String, options_json: Option<String>) -> Result<String> {
-        let opts: wdb::ImportOptions = match options_json {
+        let opts: wl::ImportOptions = match options_json {
             Some(s) => serde_json::from_str(&s).js()?,
-            None => wdb::ImportOptions::default(),
+            None => wl::ImportOptions::default(),
         };
         json(&self.db.import(&path, &opts).js()?)
     }

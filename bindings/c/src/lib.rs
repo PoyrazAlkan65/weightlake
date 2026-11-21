@@ -1,10 +1,10 @@
-//! C ABI for WeightDB. See `include/weightdb.h` for documentation.
+//! C ABI for WeightLake. See `include/weightlake.h` for documentation.
 //!
 //! Conventions:
-//! - Functions return 0 on success, -1 on error; `wdb_last_error()` gives the
+//! - Functions return 0 on success, -1 on error; `wl_last_error()` gives the
 //!   message (thread-local).
 //! - Strings returned through `char**` are heap-allocated and must be released
-//!   with `wdb_string_free`.
+//!   with `wl_string_free`.
 //! - Panics never cross the FFI boundary.
 
 #![allow(clippy::missing_safety_doc)]
@@ -14,9 +14,9 @@ use std::ffi::{c_char, c_int, c_void, CStr, CString};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::ptr;
 
-use wdb::{Database, ImportOptions};
+use wl::{Database, ImportOptions};
 
-pub struct WdbDb {
+pub struct WlDb {
     db: Database,
 }
 
@@ -56,7 +56,7 @@ unsafe fn cstr<'a>(p: *const c_char, what: &str) -> anyhow::Result<&'a str> {
     Ok(CStr::from_ptr(p).to_str()?)
 }
 
-unsafe fn db<'a>(p: *const WdbDb) -> anyhow::Result<&'a Database> {
+unsafe fn db<'a>(p: *const WlDb) -> anyhow::Result<&'a Database> {
     if p.is_null() {
         anyhow::bail!("database handle is NULL");
     }
@@ -78,51 +78,51 @@ unsafe fn out_json(out: *mut *mut c_char, v: &impl serde::Serialize) -> anyhow::
 // ------------------------------------------------------------------ basics
 
 #[no_mangle]
-pub extern "C" fn wdb_version() -> *const c_char {
+pub extern "C" fn wl_version() -> *const c_char {
     concat!(env!("CARGO_PKG_VERSION"), "\0").as_ptr() as *const c_char
 }
 
 #[no_mangle]
-pub extern "C" fn wdb_last_error() -> *const c_char {
+pub extern "C" fn wl_last_error() -> *const c_char {
     LAST_ERROR.with(|e| e.borrow().as_ptr())
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wdb_string_free(s: *mut c_char) {
+pub unsafe extern "C" fn wl_string_free(s: *mut c_char) {
     if !s.is_null() {
         drop(CString::from_raw(s));
     }
 }
 
-unsafe fn open_with(path: *const c_char, out: *mut *mut WdbDb, f: fn(&str) -> anyhow::Result<Database>) -> c_int {
+unsafe fn open_with(path: *const c_char, out: *mut *mut WlDb, f: fn(&str) -> anyhow::Result<Database>) -> c_int {
     guard(|| {
         if out.is_null() {
             anyhow::bail!("output pointer is NULL");
         }
         *out = ptr::null_mut();
         let db = f(cstr(path, "path")?)?;
-        *out = Box::into_raw(Box::new(WdbDb { db }));
+        *out = Box::into_raw(Box::new(WlDb { db }));
         Ok(())
     })
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wdb_open(path: *const c_char, out: *mut *mut WdbDb) -> c_int {
+pub unsafe extern "C" fn wl_open(path: *const c_char, out: *mut *mut WlDb) -> c_int {
     open_with(path, out, |p| Database::open(p))
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wdb_init(path: *const c_char, out: *mut *mut WdbDb) -> c_int {
+pub unsafe extern "C" fn wl_init(path: *const c_char, out: *mut *mut WlDb) -> c_int {
     open_with(path, out, |p| Database::init(p))
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wdb_open_or_init(path: *const c_char, out: *mut *mut WdbDb) -> c_int {
+pub unsafe extern "C" fn wl_open_or_init(path: *const c_char, out: *mut *mut WlDb) -> c_int {
     open_with(path, out, |p| Database::open_or_init(p))
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wdb_close(db: *mut WdbDb) {
+pub unsafe extern "C" fn wl_close(db: *mut WlDb) {
     if !db.is_null() {
         let _ = catch_unwind(AssertUnwindSafe(|| drop(Box::from_raw(db))));
     }
@@ -131,8 +131,8 @@ pub unsafe extern "C" fn wdb_close(db: *mut WdbDb) {
 // ---------------------------------------------------------------- versions
 
 #[no_mangle]
-pub unsafe extern "C" fn wdb_import(
-    h: *mut WdbDb,
+pub unsafe extern "C" fn wl_import(
+    h: *mut WlDb,
     path: *const c_char,
     options_json: *const c_char,
     out_report_json: *mut *mut c_char,
@@ -152,7 +152,7 @@ pub unsafe extern "C" fn wdb_import(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wdb_export(h: *mut WdbDb, rev: *const c_char, out_dir: *const c_char) -> c_int {
+pub unsafe extern "C" fn wl_export(h: *mut WlDb, rev: *const c_char, out_dir: *const c_char) -> c_int {
     guard(|| {
         db(h)?.export(cstr(rev, "rev")?, cstr(out_dir, "out_dir")?)?;
         Ok(())
@@ -160,22 +160,22 @@ pub unsafe extern "C" fn wdb_export(h: *mut WdbDb, rev: *const c_char, out_dir: 
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wdb_resolve(h: *mut WdbDb, rev: *const c_char, out_id: *mut *mut c_char) -> c_int {
+pub unsafe extern "C" fn wl_resolve(h: *mut WlDb, rev: *const c_char, out_id: *mut *mut c_char) -> c_int {
     guard(|| out_str(out_id, db(h)?.resolve(cstr(rev, "rev")?)?))
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wdb_log_json(h: *mut WdbDb, rev: *const c_char, limit: usize, out: *mut *mut c_char) -> c_int {
+pub unsafe extern "C" fn wl_log_json(h: *mut WlDb, rev: *const c_char, limit: usize, out: *mut *mut c_char) -> c_int {
     guard(|| out_json(out, &db(h)?.log(cstr(rev, "rev")?, if limit == 0 { usize::MAX } else { limit })?))
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wdb_branches_json(h: *mut WdbDb, out: *mut *mut c_char) -> c_int {
+pub unsafe extern "C" fn wl_branches_json(h: *mut WlDb, out: *mut *mut c_char) -> c_int {
     guard(|| out_json(out, &db(h)?.branches()?))
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wdb_create_branch(h: *mut WdbDb, name: *const c_char, rev: *const c_char) -> c_int {
+pub unsafe extern "C" fn wl_create_branch(h: *mut WlDb, name: *const c_char, rev: *const c_char) -> c_int {
     guard(|| {
         db(h)?.create_branch(cstr(name, "name")?, cstr(rev, "rev")?)?;
         Ok(())
@@ -183,33 +183,33 @@ pub unsafe extern "C" fn wdb_create_branch(h: *mut WdbDb, name: *const c_char, r
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wdb_delete_branch(h: *mut WdbDb, name: *const c_char) -> c_int {
+pub unsafe extern "C" fn wl_delete_branch(h: *mut WlDb, name: *const c_char) -> c_int {
     guard(|| db(h)?.delete_branch(cstr(name, "name")?))
 }
 
 // ----------------------------------------------------------------- tensors
 
-pub const WDB_MAX_NDIM: usize = 8;
+pub const WL_MAX_NDIM: usize = 8;
 
 #[repr(C)]
-pub struct WdbTensorInfo {
+pub struct WlTensorInfo {
     pub dtype: [c_char; 16],
     pub elem_size: u32,
     pub ndim: u32,
-    pub shape: [u64; WDB_MAX_NDIM],
+    pub shape: [u64; WL_MAX_NDIM],
     pub numel: u64,
     pub nbytes: u64,
     pub n_chunks: u64,
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wdb_tensors_json(h: *mut WdbDb, rev: *const c_char, out: *mut *mut c_char) -> c_int {
+pub unsafe extern "C" fn wl_tensors_json(h: *mut WlDb, rev: *const c_char, out: *mut *mut c_char) -> c_int {
     guard(|| out_json(out, &db(h)?.tensors(cstr(rev, "rev")?)?))
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wdb_tensor_info_json(
-    h: *mut WdbDb,
+pub unsafe extern "C" fn wl_tensor_info_json(
+    h: *mut WlDb,
     rev: *const c_char,
     name: *const c_char,
     out: *mut *mut c_char,
@@ -218,11 +218,11 @@ pub unsafe extern "C" fn wdb_tensor_info_json(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wdb_tensor_info(
-    h: *mut WdbDb,
+pub unsafe extern "C" fn wl_tensor_info(
+    h: *mut WlDb,
     rev: *const c_char,
     name: *const c_char,
-    out: *mut WdbTensorInfo,
+    out: *mut WlTensorInfo,
 ) -> c_int {
     guard(|| {
         if out.is_null() {
@@ -231,14 +231,14 @@ pub unsafe extern "C" fn wdb_tensor_info(
         let m = db(h)?.manifest(cstr(rev, "rev")?)?;
         let name = cstr(name, "name")?;
         let t = m.tensor(name).ok_or_else(|| anyhow::anyhow!("no tensor '{name}'"))?;
-        if t.shape.len() > WDB_MAX_NDIM {
-            anyhow::bail!("tensor has {} dims (max {WDB_MAX_NDIM})", t.shape.len());
+        if t.shape.len() > WL_MAX_NDIM {
+            anyhow::bail!("tensor has {} dims (max {WL_MAX_NDIM})", t.shape.len());
         }
-        let mut info = WdbTensorInfo {
+        let mut info = WlTensorInfo {
             dtype: [0; 16],
             elem_size: t.dtype.size() as u32,
             ndim: t.shape.len() as u32,
-            shape: [0; WDB_MAX_NDIM],
+            shape: [0; WL_MAX_NDIM],
             numel: t.numel(),
             nbytes: t.nbytes(),
             n_chunks: t.chunks.len() as u64,
@@ -254,8 +254,8 @@ pub unsafe extern "C" fn wdb_tensor_info(
 
 /// Copy a tensor's raw little-endian bytes into `buf` (`buf_len` must equal nbytes).
 #[no_mangle]
-pub unsafe extern "C" fn wdb_read_tensor(
-    h: *mut WdbDb,
+pub unsafe extern "C" fn wl_read_tensor(
+    h: *mut WlDb,
     rev: *const c_char,
     name: *const c_char,
     buf: *mut c_void,
@@ -271,8 +271,8 @@ pub unsafe extern "C" fn wdb_read_tensor(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wdb_read_weight(
-    h: *mut WdbDb,
+pub unsafe extern "C" fn wl_read_weight(
+    h: *mut WlDb,
     rev: *const c_char,
     name: *const c_char,
     index: u64,
@@ -290,8 +290,8 @@ pub unsafe extern "C" fn wdb_read_weight(
 // --------------------------------------------------------- queries & admin
 
 #[no_mangle]
-pub unsafe extern "C" fn wdb_diff_json(
-    h: *mut WdbDb,
+pub unsafe extern "C" fn wl_diff_json(
+    h: *mut WlDb,
     a: *const c_char,
     b: *const c_char,
     numeric: c_int,
@@ -301,22 +301,22 @@ pub unsafe extern "C" fn wdb_diff_json(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wdb_sql_json(h: *mut WdbDb, query: *const c_char, out: *mut *mut c_char) -> c_int {
+pub unsafe extern "C" fn wl_sql_json(h: *mut WlDb, query: *const c_char, out: *mut *mut c_char) -> c_int {
     guard(|| out_json(out, &db(h)?.sql_json(cstr(query, "query")?)?))
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wdb_sql_pretty(h: *mut WdbDb, query: *const c_char, out: *mut *mut c_char) -> c_int {
+pub unsafe extern "C" fn wl_sql_pretty(h: *mut WlDb, query: *const c_char, out: *mut *mut c_char) -> c_int {
     guard(|| out_str(out, db(h)?.sql_pretty(cstr(query, "query")?)?))
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wdb_stats_json(h: *mut WdbDb, out: *mut *mut c_char) -> c_int {
+pub unsafe extern "C" fn wl_stats_json(h: *mut WlDb, out: *mut *mut c_char) -> c_int {
     guard(|| out_json(out, &db(h)?.stats()?))
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wdb_gc_json(h: *mut WdbDb, dry_run: c_int, out: *mut *mut c_char) -> c_int {
+pub unsafe extern "C" fn wl_gc_json(h: *mut WlDb, dry_run: c_int, out: *mut *mut c_char) -> c_int {
     guard(|| {
         let r = db(h)?.gc(dry_run != 0)?;
         if !out.is_null() {

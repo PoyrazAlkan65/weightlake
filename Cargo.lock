@@ -2865,116 +2865,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "wdb-capi"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "serde",
- "serde_json",
- "weightdb",
-]
-
-[[package]]
-name = "wdb-cli"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "serde",
- "serde_json",
- "weightdb",
-]
-
-[[package]]
-name = "wdb-core"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "blake3",
- "half",
- "serde",
-]
-
-[[package]]
-name = "wdb-io"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "half",
- "memmap2",
- "rayon",
- "serde",
- "serde_json",
- "tempfile",
- "wdb-core",
- "wdb-store",
-]
-
-[[package]]
-name = "wdb-node"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "napi",
- "napi-build",
- "napi-derive",
- "serde",
- "serde_json",
- "weightdb",
-]
-
-[[package]]
-name = "wdb-py"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "pyo3",
- "serde",
- "serde_json",
- "weightdb",
-]
-
-[[package]]
-name = "wdb-query"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "datafusion",
- "serde_json",
- "tokio",
- "wdb-core",
- "wdb-io",
- "wdb-store",
-]
-
-[[package]]
-name = "wdb-store"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "blake3",
- "memmap2",
- "postcard",
- "redb",
- "serde",
- "serde_json",
- "tempfile",
- "wdb-core",
- "zstd 0.14.4",
-]
-
-[[package]]
-name = "wdb-version"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "half",
- "wdb-core",
- "wdb-io",
- "wdb-store",
-]
-
-[[package]]
 name = "web-time"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2985,7 +2875,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "weightdb"
+name = "weightlake"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -2993,11 +2883,11 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
- "wdb-core",
- "wdb-io",
- "wdb-query",
- "wdb-store",
- "wdb-version",
+ "wl-core",
+ "wl-io",
+ "wl-query",
+ "wl-store",
+ "wl-version",
 ]
 
 [[package]]
@@ -3082,6 +2972,116 @@ name = "wit-bindgen"
 version = "0.57.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e"
+
+[[package]]
+name = "wl-capi"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_json",
+ "weightlake",
+]
+
+[[package]]
+name = "wl-cli"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "serde",
+ "serde_json",
+ "weightlake",
+]
+
+[[package]]
+name = "wl-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "blake3",
+ "half",
+ "serde",
+]
+
+[[package]]
+name = "wl-io"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "half",
+ "memmap2",
+ "rayon",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "wl-core",
+ "wl-store",
+]
+
+[[package]]
+name = "wl-node"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "napi",
+ "napi-build",
+ "napi-derive",
+ "serde",
+ "serde_json",
+ "weightlake",
+]
+
+[[package]]
+name = "wl-py"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "pyo3",
+ "serde",
+ "serde_json",
+ "weightlake",
+]
+
+[[package]]
+name = "wl-query"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "datafusion",
+ "serde_json",
+ "tokio",
+ "wl-core",
+ "wl-io",
+ "wl-store",
+]
+
+[[package]]
+name = "wl-store"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "blake3",
+ "memmap2",
+ "postcard",
+ "redb",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "wl-core",
+ "zstd 0.14.4",
+]
+
+[[package]]
+name = "wl-version"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "half",
+ "wl-core",
+ "wl-io",
+ "wl-store",
+]
 
 [[package]]
 name = "writeable"

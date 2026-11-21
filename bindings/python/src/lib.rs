@@ -1,6 +1,6 @@
-//! Native layer of the `weightdb` Python package. Kept deliberately thin:
+//! Native layer of the `weightlake` Python package. Kept deliberately thin:
 //! structured results cross as JSON strings, tensor data as a bytearray.
-//! The friendly API (numpy / torch / dicts) lives in `weightdb/__init__.py`.
+//! The friendly API (numpy / torch / dicts) lives in `weightlake/__init__.py`.
 
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
@@ -26,9 +26,9 @@ fn json(v: &impl serde::Serialize) -> PyResult<String> {
     serde_json::to_string(v).py()
 }
 
-#[pyclass(frozen, module = "weightdb._native")]
+#[pyclass(frozen, module = "weightlake._native")]
 struct Database {
-    db: wdb::Database,
+    db: wl::Database,
 }
 
 #[pymethods]
@@ -36,13 +36,13 @@ impl Database {
     #[new]
     #[pyo3(signature = (path, create = false))]
     fn new(path: &str, create: bool) -> PyResult<Self> {
-        let db = if create { wdb::Database::open_or_init(path) } else { wdb::Database::open(path) }.py()?;
+        let db = if create { wl::Database::open_or_init(path) } else { wl::Database::open(path) }.py()?;
         Ok(Database { db })
     }
 
     #[staticmethod]
     fn init(path: &str) -> PyResult<Self> {
-        Ok(Database { db: wdb::Database::init(path).py()? })
+        Ok(Database { db: wl::Database::init(path).py()? })
     }
 
     fn path(&self) -> String {
@@ -50,7 +50,7 @@ impl Database {
     }
 
     fn import_model(&self, path: &str, options_json: &str) -> PyResult<String> {
-        let opts: wdb::ImportOptions = serde_json::from_str(options_json).py()?;
+        let opts: wl::ImportOptions = serde_json::from_str(options_json).py()?;
         json(&self.db.import(path, &opts).py()?)
     }
 
@@ -65,10 +65,10 @@ impl Database {
         aux: Vec<(String, Vec<u8>)>,
         options_json: &str,
     ) -> PyResult<String> {
-        let opts: wdb::ImportOptions = serde_json::from_str(options_json).py()?;
+        let opts: wl::ImportOptions = serde_json::from_str(options_json).py()?;
         let mut mem = Vec::with_capacity(tensors.len());
         for (name, dtype, shape, addr, nbytes) in tensors {
-            let dtype = wdb::DType::parse(&dtype)
+            let dtype = wl::DType::parse(&dtype)
                 .ok_or_else(|| PyRuntimeError::new_err(format!("tensor '{name}': unknown dtype {dtype}")))?;
             let data: &[u8] = if nbytes == 0 {
                 &[]
@@ -79,7 +79,7 @@ impl Database {
                 // to every source tensor until this call returns.
                 unsafe { std::slice::from_raw_parts(addr as *const u8, nbytes) }
             };
-            mem.push(wdb::MemTensor { name, dtype, shape, data });
+            mem.push(wl::MemTensor { name, dtype, shape, data });
         }
         let report = py.detach(|| self.db.import_tensors(mem, &aux, &opts)).py()?;
         json(&report)

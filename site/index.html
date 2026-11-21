@@ -1,0 +1,827 @@
+<title>WeightLake</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="WeightLake: an embedded database for neural network weights. Versioned, deduplicated, delta-compressed and queryable with SQL.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Schibsted+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a night lake. A fixed WebGL scene of weight columns sits behind a five-chapter
+   scroll story; after the story, content floats on translucent panels above the dimmed lake.
+   Deliberately single-theme (dark): the scene's lighting is part of the identity. */
+:root {
+  --bg: #050d12;
+  --bg-2: #0a1820;
+  --panel: rgba(9, 22, 29, 0.78);
+  --ink: #e4f0f1;
+  --muted: #8aa4a9;
+  --line: #1c323a;
+  --aqua: #6fe3d6;
+  --aqua-ink: #04201d;
+  --amber: #f2b45a;
+  --shared: #2a4650;
+  --zero: #10242c;
+  --code-bg: rgba(4, 13, 18, 0.85);
+  --font-display: "Bricolage Grotesque", "Arial Narrow", system-ui, sans-serif;
+  --font-body: "Schibsted Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --step--1: 0.875rem;
+  --step-0: 1.0625rem;
+  --step-1: 1.3rem;
+  --step-2: 1.75rem;
+  --step-3: clamp(2rem, 4.6vw, 3.4rem);
+  --step-4: clamp(3.2rem, 11vw, 8.5rem);
+  --maxw: 74rem;
+  --ease: cubic-bezier(.2, .7, .1, 1);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: var(--step-0); line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 30; background: var(--bg); }
+#scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; z-index: 0; }
+.no-webgl #scene { display: none; }
+.no-webgl body, body.no-webgl { background: radial-gradient(ellipse at 70% 60%, #0f3540 0%, var(--bg) 60%); }
+.vignette { position: fixed; inset: 0; z-index: 1; pointer-events: none;
+  background: linear-gradient(90deg, rgba(5,13,18,.92) 0%, rgba(5,13,18,.55) 38%, rgba(5,13,18,0) 62%), linear-gradient(0deg, rgba(5,13,18,.7), rgba(5,13,18,0) 30%); }
+@media (max-width: 820px) { .vignette { background: linear-gradient(0deg, rgba(5,13,18,.92) 10%, rgba(5,13,18,.35) 60%, rgba(5,13,18,.6) 100%); } }
+main, header, footer, .rail { position: relative; z-index: 2; }
+
+.wrap {
+  max-width: var(--maxw); margin: 0 auto;
+  padding-left: max(20px, env(safe-area-inset-left, 0px));
+  padding-right: max(20px, env(safe-area-inset-right, 0px));
+}
+h1, h2, h3 { font-family: var(--font-display); line-height: 1.02; text-wrap: balance; margin: 0; font-weight: 800; letter-spacing: -0.025em; }
+h1 { font-size: var(--step-4); letter-spacing: -0.045em; }
+h2 { font-size: var(--step-3); }
+h3 { font-size: var(--step-1); font-weight: 700; letter-spacing: -0.01em; }
+p { margin: 0; max-width: 62ch; }
+a { color: var(--aqua); }
+code, pre, .mono { font-family: var(--font-mono); }
+code { font-size: 0.9em; }
+:focus-visible { outline: 2px solid var(--aqua); outline-offset: 3px; border-radius: 4px; }
+.eyebrow { font-family: var(--font-mono); font-size: 0.78rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--aqua); }
+.muted { color: var(--muted); }
+
+:root[lang="tr"] [lang="en"]:not(html) { display: none; }
+:root[lang="en"] [lang="tr"]:not(html) { display: none; }
+
+/* ---------- header ---------- */
+.top { position: fixed; top: env(safe-area-inset-top, 0px); left: 0; right: 0; z-index: 20; transition: background-color .4s, border-color .4s; border-bottom: 1px solid transparent; }
+.top.solid { background: rgba(5, 13, 18, 0.82); backdrop-filter: blur(14px); border-color: var(--line); }
+.top .wrap { display: flex; align-items: center; gap: 1rem; padding-block: 0.9rem; }
+.logo { display: flex; align-items: center; gap: 0.6rem; font-family: var(--font-display); font-weight: 800; font-size: 1.2rem; letter-spacing: -0.02em; color: var(--ink); text-decoration: none; }
+.logo svg { width: 26px; height: 26px; flex: none; }
+.nav { display: flex; gap: 1.6rem; margin-left: auto; align-items: center; }
+.nav a.l { color: var(--muted); text-decoration: none; font-size: 0.92rem; transition: color .2s; }
+.nav a.l:hover { color: var(--ink); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+.seg button { font: 600 0.72rem var(--font-mono); padding: 0.32rem 0.7rem; background: transparent; color: var(--muted); border: 0; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+@media (max-width: 760px) { .nav a.l { display: none; } }
+
+/* ---------- progress rail ---------- */
+.rail { position: fixed; right: max(18px, env(safe-area-inset-right, 0px)); top: 50%; transform: translateY(-50%); display: grid; gap: 0.9rem; z-index: 15; transition: opacity .4s; }
+.rail a { display: grid; grid-template-columns: auto 8px; gap: 0.7rem; align-items: center; text-decoration: none; color: var(--muted); font: 500 0.7rem var(--font-mono); letter-spacing: .08em; }
+.rail a span { opacity: 0; transform: translateX(6px); transition: opacity .3s, transform .3s var(--ease); text-align: right; }
+.rail a i { width: 8px; height: 8px; border-radius: 50%; border: 1px solid var(--muted); transition: background-color .3s, border-color .3s, transform .3s; }
+.rail a.on { color: var(--ink); }
+.rail a.on span, .rail:hover a span { opacity: 1; transform: none; }
+.rail a.on i { background: var(--aqua); border-color: var(--aqua); transform: scale(1.3); }
+.rail.gone { opacity: 0; pointer-events: none; }
+@media (max-width: 760px) { .rail { display: none; } }
+
+/* ---------- story ---------- */
+.chapter { min-height: 100vh; min-height: 100svh; display: grid; align-items: center; padding-block: 7rem 4rem; }
+.chapter .wrap { width: 100%; }
+.card { max-width: 34rem; display: grid; gap: 1.3rem; }
+.chapter-0 .card { max-width: 46rem; }
+.lede { font-size: var(--step-1); color: var(--muted); line-height: 1.5; }
+.lede b { color: var(--ink); font-weight: 600; }
+.count { font-family: var(--font-mono); font-size: 0.78rem; color: var(--muted); letter-spacing: .1em; }
+.count b { color: var(--aqua); font-weight: 600; }
+.fact { display: flex; flex-wrap: wrap; gap: 0.5rem 2rem; padding-top: 1.2rem; border-top: 1px solid var(--line); font-family: var(--font-mono); font-size: 0.85rem; color: var(--muted); }
+.fact b { display: block; font-family: var(--font-display); font-size: var(--step-2); color: var(--ink); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.fact .amber { color: var(--amber); }
+.fact .aqua { color: var(--aqua); }
+.hero-word { display: block; }
+.hero-word em { font-style: normal; color: var(--aqua); }
+.ctas { display: flex; flex-wrap: wrap; gap: 0.8rem; align-items: center; }
+.btn { display: inline-flex; align-items: center; gap: 0.55rem; padding: 0.85rem 1.3rem; border-radius: 999px; font-weight: 600; text-decoration: none; border: 1px solid var(--line); color: var(--ink); background: rgba(10, 24, 32, .6); cursor: pointer; font-family: var(--font-body); font-size: 0.98rem; transition: transform .25s var(--ease), border-color .25s, background-color .25s; }
+.btn:hover { transform: translateY(-2px); border-color: var(--muted); }
+.btn.primary { background: var(--aqua); color: var(--aqua-ink); border-color: var(--aqua); }
+.install { display: flex; align-items: center; gap: 0.7rem; font-family: var(--font-mono); font-size: 0.82rem; background: var(--code-bg); border: 1px solid var(--line); border-radius: 12px; padding: 0.6rem 0.7rem 0.6rem 1rem; min-width: 0; max-width: 100%; width: fit-content; }
+.install .p { color: var(--aqua); }
+.install code { overflow-x: auto; white-space: nowrap; min-width: 0; }
+.install button { margin-left: auto; flex: none; font: 600 0.72rem var(--font-mono); border: 1px solid var(--line); background: transparent; color: var(--ink); border-radius: 8px; padding: 0.3rem 0.6rem; cursor: pointer; }
+.scroll-hint { font: 500 0.72rem var(--font-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); display: flex; align-items: center; gap: 0.7rem; }
+.scroll-hint i { width: 1px; height: 36px; background: linear-gradient(var(--aqua), transparent); animation: drip 2.2s var(--ease) infinite; transform-origin: top; }
+@keyframes drip { 0% { transform: scaleY(0); } 50% { transform: scaleY(1); } 100% { transform: scaleY(1); opacity: 0; } }
+
+/* ---------- content ---------- */
+.content { position: relative; z-index: 2; }
+.content::before { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(5,13,18,0) 0, rgba(5,13,18,.86) 18rem, rgba(5,13,18,.9) 100%); z-index: -1; pointer-events: none; }
+section.s { padding-block: clamp(4.5rem, 10vw, 8rem); }
+.s-head { display: grid; gap: 1rem; margin-bottom: 3rem; }
+.s-head p { color: var(--muted); font-size: var(--step-1); line-height: 1.5; }
+.glass { background: var(--panel); border: 1px solid var(--line); border-radius: 20px; backdrop-filter: blur(10px); }
+
+/* reveal: elements below the fold at load slide up when they enter the viewport */
+.rv { transition: transform 1s var(--ease), opacity 1s var(--ease); }
+.rv.pending { transform: translateY(36px); opacity: 0; }
+
+/* advantages */
+.adv { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 20px; overflow: hidden; }
+.adv article { background: rgba(7, 18, 24, .92); padding: 2rem 1.8rem; display: grid; gap: 0.7rem; align-content: start; transition: background-color .3s; }
+.adv article:hover { background: rgba(14, 34, 42, .95); }
+.adv .tag { font: 600 0.7rem var(--font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--amber); }
+.adv p { color: var(--muted); font-size: 0.98rem; }
+
+/* concepts */
+.map { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 13.5rem), 1fr)); gap: 1rem; }
+.map div { padding: 1.3rem 1.3rem 1.4rem; display: grid; gap: 0.35rem; align-content: start; border-top: 1px solid var(--line); }
+.map .from { font: 500 0.78rem var(--font-mono); color: var(--muted); }
+.map .to { font-family: var(--font-display); font-weight: 700; font-size: 1.35rem; color: var(--ink); }
+.map p { color: var(--muted); font-size: 0.92rem; }
+
+/* bits */
+.bits { padding: clamp(1.4rem, 3vw, 2.4rem); display: grid; gap: 1.6rem; }
+.bits-controls { display: flex; flex-wrap: wrap; gap: 1rem 2rem; align-items: end; }
+.field { display: grid; gap: 0.4rem; min-width: 0; }
+.field label { font-size: var(--step--1); color: var(--muted); }
+.field input[type=range] { width: min(100%, 24rem); accent-color: var(--amber); }
+.chip { font: 600 0.78rem var(--font-mono); border: 1px solid var(--line); background: transparent; color: var(--ink); padding: 0.5rem 0.9rem; border-radius: 999px; cursor: pointer; }
+.chip[aria-pressed="true"] { border-color: var(--amber); color: var(--amber); }
+.bitrows { display: grid; gap: 0.6rem; overflow-x: auto; padding-bottom: 0.3rem; }
+.bitrow, .bitscale { display: grid; grid-template-columns: 7rem minmax(19rem, 1fr) 9rem; gap: 0.9rem; align-items: center; }
+.bitrow .lab { font-family: var(--font-mono); font-size: 0.78rem; color: var(--muted); }
+.bitrow .lab b { color: var(--ink); display: block; font-weight: 600; }
+.bitrow .val { font-family: var(--font-mono); font-size: 0.82rem; text-align: right; font-variant-numeric: tabular-nums; }
+.bitcells { display: grid; grid-template-columns: repeat(32, minmax(0, 1fr)); gap: 2px; }
+.b { font: 600 0.66rem/1 var(--font-mono); text-align: center; padding: 0.45rem 0; border-radius: 3px; background: var(--zero); color: var(--muted); transition: background-color .25s, color .25s; }
+.b.one { background: var(--ink); color: var(--bg); }
+.b.s1, .b.e8 { margin-right: 4px; }
+.xor .b.one { background: var(--amber); color: #2a1800; }
+.bitscale { font: 0.7rem var(--font-mono); color: var(--muted); }
+.bitscale > div:nth-child(2) { display: grid; grid-template-columns: 1fr 8fr 23fr; gap: 4px; }
+.bitscale span { border-top: 1px solid var(--line); padding-top: 0.3rem; }
+.bits-summary { display: flex; flex-wrap: wrap; gap: 1rem 3rem; font-family: var(--font-mono); font-size: 0.88rem; color: var(--muted); }
+.bits-summary b { font-size: var(--step-3); font-family: var(--font-display); color: var(--amber); display: block; line-height: 1; font-variant-numeric: tabular-nums; }
+.note { font-size: var(--step--1); color: var(--muted); }
+
+/* numbers */
+.numbers { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); gap: 2.2rem 2rem; }
+.num { display: grid; gap: 0.4rem; align-content: start; border-left: 1px solid var(--line); padding-left: 1.2rem; }
+.num .v { font-family: var(--font-display); font-weight: 800; font-size: var(--step-3); letter-spacing: -0.03em; font-variant-numeric: tabular-nums; line-height: 1; }
+.num .v small { font-size: 0.5em; color: var(--muted); font-weight: 700; }
+.num .k { color: var(--muted); font-size: 0.95rem; }
+.numbers-note { margin-top: 2.2rem; }
+
+/* tabs */
+.tabs { display: flex; flex-wrap: wrap; gap: 0.45rem; margin-bottom: 1.2rem; }
+.tabs button { font: 600 0.8rem var(--font-mono); padding: 0.5rem 0.95rem; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--muted); cursor: pointer; transition: color .2s, border-color .2s; }
+.tabs button:hover { color: var(--ink); }
+.tabs button[aria-selected="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.panel { display: grid; gap: 1rem; min-width: 0; }
+.panel p { color: var(--muted); }
+pre.code { margin: 0; background: var(--code-bg); border: 1px solid var(--line); border-radius: 14px; padding: 1.2rem 1.3rem; overflow-x: auto; font-size: 0.84rem; line-height: 1.65; }
+pre.out { margin: 0; border-left: 2px solid var(--aqua); padding: 0.6rem 1.1rem; overflow-x: auto; font-size: 0.78rem; line-height: 1.45; color: var(--ink); }
+.c { color: #6a858b; }
+
+/* storage */
+.store { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 3rem; align-items: start; }
+@media (max-width: 860px) { .store { grid-template-columns: minmax(0, 1fr); } }
+.steps { display: grid; gap: 1.3rem; counter-reset: st; margin: 0; padding: 0; list-style: none; }
+.steps li { display: grid; grid-template-columns: 2.4rem minmax(0, 1fr); gap: 1rem; counter-increment: st; }
+.steps li::before { content: counter(st, decimal-leading-zero); font: 600 0.75rem var(--font-mono); color: var(--aqua); border: 1px solid var(--line); border-radius: 50%; width: 2.4rem; height: 2.4rem; display: grid; place-items: center; }
+.steps li p { color: var(--muted); font-size: 0.95rem; }
+.steps li b { color: var(--ink); font-weight: 600; }
+.tbl { overflow-x: auto; }
+.codecs { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+.codecs th, .codecs td { text-align: left; padding: 0.8rem 0.6rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+.codecs th { font: 600 0.7rem var(--font-mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; }
+.codecs td:first-child { font-family: var(--font-mono); white-space: nowrap; color: var(--aqua); }
+.codecs td { color: var(--muted); }
+
+/* roadmap */
+.road { display: grid; border-top: 1px solid var(--line); }
+.road div { display: grid; grid-template-columns: 7rem minmax(0, 1fr); gap: 1rem; padding: 1.05rem 0; border-bottom: 1px solid var(--line); }
+.pill { font: 600 0.7rem var(--font-mono); padding: 0.22rem 0.6rem; border-radius: 999px; justify-self: start; align-self: start; border: 1px solid; letter-spacing: .04em; }
+.pill.done { color: var(--aqua); }
+.pill.wip { color: var(--amber); }
+.pill.next { color: var(--muted); }
+.limits { margin: 2.2rem 0 0; display: grid; gap: 0.5rem; color: var(--muted); padding-left: 1.1rem; }
+
+/* closing */
+.closing { text-align: left; display: grid; gap: 1.6rem; padding: clamp(2rem, 6vw, 4.5rem); }
+.closing h2 { font-size: clamp(2.4rem, 7vw, 5.2rem); letter-spacing: -0.04em; }
+.closing h2 em { font-style: normal; color: var(--aqua); }
+footer { border-top: 1px solid var(--line); background: var(--bg); }
+footer .wrap { display: flex; flex-wrap: wrap; gap: 1rem 2rem; justify-content: space-between; padding-block: 2.2rem; color: var(--muted); font-size: var(--step--1); }
+footer a { color: var(--muted); }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+  .rv.pending { transform: none; opacity: 1; }
+}
+</style>
+
+<canvas id="scene" aria-hidden="true"></canvas>
+<div class="vignette" aria-hidden="true"></div>
+
+<header class="top" id="top-bar">
+  <div class="wrap">
+    <a class="logo" href="#ch-0" aria-label="WeightLake">
+      <svg viewBox="0 0 26 26" aria-hidden="true"><rect x="2" y="9" width="4" height="9" rx="1" fill="var(--aqua)"/><rect x="8" y="4" width="4" height="14" rx="1" fill="var(--aqua)"/><rect x="14" y="7" width="4" height="11" rx="1" fill="var(--amber)"/><rect x="20" y="11" width="4" height="7" rx="1" fill="var(--aqua)"/><path d="M1 22 q3 -2.2 6 0 t6 0 t6 0 t6 0" fill="none" stroke="var(--muted)" stroke-width="1.4" stroke-linecap="round"/></svg>
+      WeightLake
+    </a>
+    <nav class="nav" aria-label="Sections">
+      <a class="l" href="#advantages"><span lang="tr">Avantajlar</span><span lang="en">Advantages</span></a>
+      <a class="l" href="#xor">XOR</a>
+      <a class="l" href="#sql">SQL</a>
+      <a class="l" href="#api">API</a>
+      <a class="l" href="https://github.com/PoyrazAlkan65/weightlake">GitHub</a>
+      <div class="seg" role="group" aria-label="Language">
+        <button type="button" id="lang-tr" data-lang="tr">TR</button>
+        <button type="button" id="lang-en" data-lang="en">EN</button>
+      </div>
+    </nav>
+  </div>
+</header>
+
+<nav class="rail" id="rail" aria-label="Story">
+  <a href="#ch-0"><span lang="tr">Göl</span><span lang="en">Lake</span><i></i></a>
+  <a href="#ch-1"><span>Chunk</span><i></i></a>
+  <a href="#ch-2"><span>Delta</span><i></i></a>
+  <a href="#ch-3"><span>SQL</span><i></i></a>
+  <a href="#ch-4"><span lang="tr">Sonra</span><span lang="en">Next</span><i></i></a>
+</nav>
+
+<main>
+  <!-- ================= STORY ================= -->
+  <section class="chapter chapter-0" id="ch-0">
+    <div class="wrap">
+      <div class="card">
+        <span class="eyebrow"><span lang="tr">Sinir ağı ağırlıkları için veritabanı</span><span lang="en">The database for neural network weights</span></span>
+        <h1><span class="hero-word">Weight<em>Lake</em></span></h1>
+        <p class="lede">
+          <span lang="tr">Model checkpoint'lerini dosya yığını olarak değil, <b>sorgulanabilir veri</b> olarak sakla. Her sürüm Git gibi kayıtlı, her bayt bir kez yazılı, her ağırlık SQL'in bir satır uzağında.</span>
+          <span lang="en">Keep model checkpoints as <b>queryable data</b>, not a pile of files. Every version recorded like Git, every byte written once, every weight one SQL line away.</span>
+        </p>
+        <div class="ctas">
+          <a class="btn primary" href="https://github.com/PoyrazAlkan65/weightlake">GitHub →</a>
+          <a class="btn" href="#advantages"><span lang="tr">Neden WeightLake</span><span lang="en">Why WeightLake</span></a>
+        </div>
+        <div class="install">
+          <span class="p">$</span><code id="install-cmd">git clone https://github.com/PoyrazAlkan65/weightlake</code>
+          <button type="button" id="copy-install"><span lang="tr">Kopyala</span><span lang="en">Copy</span></button>
+        </div>
+        <div class="scroll-hint"><i></i><span lang="tr">Gölün içine kaydır</span><span lang="en">Scroll into the lake</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="chapter" id="ch-1">
+    <div class="wrap">
+      <div class="card">
+        <span class="count"><b>01</b> / 04 · chunk</span>
+        <h2><span lang="tr">Her matris satır bloklarına ayrılır</span><span lang="en">Every matrix splits into blocks of rows</span></h2>
+        <p class="lede"><span lang="tr">Bir tensör ~4 MiB'lık chunk'lara, her zaman satır sınırından bölünür. Her chunk'ın kimliği BLAKE3 hash'idir. Aynı baytlar hangi modelde ya da sürümde olursa olsun diske bir kez yazılır.</span><span lang="en">A tensor is cut into ~4 MiB chunks, always on row boundaries. Each chunk's identity is its BLAKE3 hash, so the same bytes are written to disk once, whatever model or version they belong to.</span></p>
+        <div class="fact">
+          <div><b class="aqua">[768, 2304]</b><code>h.0.attn.c_attn.weight</code></div>
+          <div><b>2</b><span lang="tr">chunk, tam satırlar</span><span lang="en">chunks, whole rows</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="chapter" id="ch-2">
+    <div class="wrap">
+      <div class="card">
+        <span class="count"><b>02</b> / 04 · delta</span>
+        <h2><span lang="tr">Yeni sürüm sadece değişeni yazar</span><span lang="en">A new version writes only what changed</span></h2>
+        <p class="lede"><span lang="tr">Değişmeyen chunk'lar paylaşılır. Değişenler önceki sürümdeki karşılığıyla XOR'lanır ve zstd ile sıkıştırılır. GPT-2 üzerinde, 28 tensörü değişen bir fine-tune diske sadece <b>41,5 MiB</b> ekledi.</span><span lang="en">Unchanged chunks are shared. Changed ones are XOR'ed with their counterpart in the previous version and compressed with zstd. On GPT-2, a fine-tune that changed 28 tensors added only <b>41.5 MiB</b> to disk.</span></p>
+        <div class="fact">
+          <div><b class="aqua">88%</b><span lang="tr">yeniden kullanıldı</span><span lang="en">reused</span></div>
+          <div><b class="amber">62 → 41.5 MiB</b><span lang="tr">XOR delta</span><span lang="en">XOR delta</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="chapter" id="ch-3">
+    <div class="wrap">
+      <div class="card">
+        <span class="count"><b>03</b> / 04 · SQL</span>
+        <h2><span lang="tr">Modeli yüklemeden sorgula</span><span lang="en">Query the model without loading it</span></h2>
+        <p class="lede"><span lang="tr">Her chunk istatistik taşır: min, max, L2, sıfır, NaN. "En büyük normlu attention matrisleri" sorusu tek bir ağırlık okunmadan cevaplanır. Yükselen sütunlar GPT-2'deki gerçek ilk beş.</span><span lang="en">Every chunk carries statistics: min, max, L2, zeros, NaN. "Largest-norm attention matrices" is answered without reading a single weight. The rising columns are GPT-2's real top five.</span></p>
+        <pre class="code">SELECT name, l2 FROM tensors
+WHERE commit_id = rev('main')
+  AND role = 'attention' AND ndim = 2
+ORDER BY l2 DESC LIMIT 5;</pre>
+      </div>
+    </div>
+  </section>
+
+  <section class="chapter" id="ch-4">
+    <div class="wrap">
+      <div class="card">
+        <span class="count"><b>04</b> / 04 · round trip</span>
+        <h2><span lang="tr">Ve her şey bayt bayt geri döner</span><span lang="en">And everything comes back byte for byte</span></h2>
+        <p class="lede"><span lang="tr">Export ettiğin <code>.safetensors</code> dosyası orijinaliyle birebir aynı. PyTorch tarafında <code>save_pretrained</code> ve <code>from_pretrained</code> ağırlıkları dosyasız taşır. Göl sakin, veri yerinde.</span><span lang="en">The <code>.safetensors</code> file you export is identical to the original. On the PyTorch side, <code>save_pretrained</code> and <code>from_pretrained</code> move weights with no files at all. The lake is calm, the data is in place.</span></p>
+        <div class="fact">
+          <div><b class="aqua">0 B</b><span lang="tr">export sonrası fark</span><span lang="en">diff after export</span></div>
+          <div><b>+1 080 B</b><span lang="tr">değişmemiş modeli tekrar kaydetmek</span><span lang="en">re-saving an unchanged model</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= CONTENT ================= -->
+  <div class="content" id="content">
+
+    <section class="s" id="advantages">
+      <div class="wrap">
+        <div class="s-head rv">
+          <span class="eyebrow"><span lang="tr">Avantajlar</span><span lang="en">Advantages</span></span>
+          <h2><span lang="tr">Checkpoint dosyalarının yapamadıkları</span><span lang="en">What checkpoint files can't do</span></h2>
+          <p><span lang="tr">7B'lik bir modelin on fine-tune'u, katmanların çoğu aynı kalsa bile ~14 GB'lık on kopya demek. "Hangi katman ne kadar değişti?" sorusu için de hepsini bir framework'e yüklemen gerekir.</span><span lang="en">Ten fine-tunes of a 7B model are ten ~14 GB copies, even when most layers stay the same. And asking "which layer moved, and how far?" means loading all of them into a framework.</span></p>
+        </div>
+        <div class="adv rv">
+          <article><span class="tag"><span lang="tr">Depolama</span><span lang="en">Storage</span></span><h3><span lang="tr">Her bayt bir kez</span><span lang="en">Every byte once</span></h3><p><span lang="tr">İçerik-adresli chunk'lar. 50 sürümde değişmeyen bir katman diskte tek kopya. Bağlı ağırlıklar (<code>lm_head</code> = <code>wte</code>) ek yer kaplamaz.</span><span lang="en">Content-addressed chunks. A layer unchanged across 50 versions is one copy on disk. Tied weights (<code>lm_head</code> = <code>wte</code>) take no extra space.</span></p></article>
+          <article><span class="tag"><span lang="tr">Sıkıştırma</span><span lang="en">Compression</span></span><h3><span lang="tr">Değişiklikler delta olarak</span><span lang="en">Changes as deltas</span></h3><p><span lang="tr">XOR + bayt düzlemleri + zstd. Küçük güncellemelerde XOR sonucu neredeyse tamamen sıfır.</span><span lang="en">XOR + byte planes + zstd. For small updates the XOR is almost all zeros.</span></p></article>
+          <article><span class="tag"><span lang="tr">Sorgu</span><span lang="en">Query</span></span><h3><span lang="tr">Yüklemeden SQL</span><span lang="en">SQL without loading</span></h3><p><span lang="tr">Normlar, seyreklik, NaN sayıları indeksten. Sürümler arası kosinüs ve L2 sapması SQL fonksiyonu.</span><span lang="en">Norms, sparsity and NaN counts from the index. Cosine and L2 drift between versions are SQL functions.</span></p></article>
+          <article><span class="tag"><span lang="tr">Okuma</span><span lang="en">Reads</span></span><h3><span lang="tr">Sadece gerekeni oku</span><span lang="en">Read only what you need</span></h3><p><span lang="tr">Tek bir tensör ya da tek bir ağırlık. Yalnızca onu içeren chunk çözülür, mmap'ten sıfır kopyayla.</span><span lang="en">One tensor or one weight. Only the chunk that holds it is decoded, from a memory map with zero copies.</span></p></article>
+          <article><span class="tag"><span lang="tr">Sürümleme</span><span lang="en">Versioning</span></span><h3><span lang="tr">Model için Git</span><span lang="en">Git for models</span></h3><p><span lang="tr">Commit, branch, <code>main~1</code>, log, yapısal ve sayısal diff, gc. Yarıda kesilen import yarım sürüm bırakmaz.</span><span lang="en">Commit, branch, <code>main~1</code>, log, structural and numeric diff, gc. An interrupted import leaves no half-written version.</span></p></article>
+          <article><span class="tag">PyTorch</span><h3><span lang="tr">Doğrudan transformers</span><span lang="en">Straight from transformers</span></h3><p><span lang="tr"><code>save_pretrained</code> / <code>from_pretrained</code> ağırlıkları RAM ile veritabanı arasında taşır. Logitler birebir aynı.</span><span lang="en"><code>save_pretrained</code> / <code>from_pretrained</code> move weights between RAM and the database. Logits are identical.</span></p></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="s" id="concepts">
+      <div class="wrap">
+        <div class="s-head rv">
+          <span class="eyebrow"><span lang="tr">Kavramlar</span><span lang="en">Concepts</span></span>
+          <h2><span lang="tr">MongoDB'yi biliyorsan bunu da biliyorsun</span><span lang="en">If you know MongoDB, you know this</span></h2>
+        </div>
+        <div class="map rv">
+          <div><span class="from">Database →</span><span class="to">Repo</span><p><span lang="tr">Bir modelin bütün sürümleri</span><span lang="en">Every version of a model</span></p></div>
+          <div><span class="from">Collection →</span><span class="to">Tensor</span><p><span lang="tr">Bir ağırlık matrisi</span><span lang="en">One weight matrix</span></p></div>
+          <div><span class="from">Document →</span><span class="to">Chunk</span><p><span lang="tr">~4 MiB tam satır, BLAKE3</span><span lang="en">~4 MiB of rows, BLAKE3</span></p></div>
+          <div><span class="from">Field →</span><span class="to">Weight</span><p><code>weight(rev, tensor, i)</code></p></div>
+          <div><span class="from">Index →</span><span class="to">Chunk stats</span><p><span lang="tr">min, max, L2, sıfır, NaN</span><span lang="en">min, max, L2, zeros, NaN</span></p></div>
+          <div><span class="from">Git commit →</span><span class="to">Commit</span><p><span lang="tr">Model sürümü</span><span lang="en">Model version</span></p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="s" id="xor">
+      <div class="wrap">
+        <div class="s-head rv">
+          <span class="eyebrow"><span lang="tr">Bit düzeyinde · XOR delta</span><span lang="en">At the bit level · XOR delta</span></span>
+          <h2><span lang="tr">Fine-tune bitlerin çoğuna dokunmaz</span><span lang="en">A fine-tune leaves most bits alone</span></h2>
+          <p><span lang="tr">Bu çift gerçek: GPT-2'nin <code>h.11.mlp.c_fc.weight[0]</code> ağırlığı, base ve fine-tune sürümünde. İşaret ve üs bitleri değişmiyor. XOR'un sıfır bitleri zstd için neredeyse bedava.</span><span lang="en">This pair is real: GPT-2's <code>h.11.mlp.c_fc.weight[0]</code> in the base and fine-tuned versions. The sign and exponent bits don't change. The zero bits of the XOR cost zstd almost nothing.</span></p>
+        </div>
+        <div class="bits glass rv">
+          <div class="bits-controls">
+            <div class="field">
+              <label for="mag"><span lang="tr">Güncelleme büyüklüğü (göreli)</span><span lang="en">Update size (relative)</span>: <b class="mono" id="mag-label"></b></label>
+              <input type="range" id="mag" min="-7" max="-0.5" step="0.1" value="-1.9">
+            </div>
+            <button type="button" class="chip" id="real-pair" aria-pressed="true"><span lang="tr">Gerçek GPT-2 çifti</span><span lang="en">Real GPT-2 pair</span></button>
+          </div>
+          <div class="bitrows" role="img" aria-label="Bits of the base weight, the fine-tuned weight and their XOR">
+            <div class="bitrow"><div class="lab"><b>base</b>main</div><div class="bitcells" id="bits-a"></div><div class="val" id="val-a"></div></div>
+            <div class="bitrow"><div class="lab"><b>fine-tune</b>ft</div><div class="bitcells" id="bits-b"></div><div class="val" id="val-b"></div></div>
+            <div class="bitrow xor"><div class="lab"><b>XOR</b><span lang="tr">saklanan</span><span lang="en">stored</span></div><div class="bitcells" id="bits-x"></div><div class="val" id="val-x"></div></div>
+            <div class="bitscale"><div></div><div><span><span lang="tr">işaret</span><span lang="en">sign</span></span><span><span lang="tr">üs (8)</span><span lang="en">exponent (8)</span></span><span><span lang="tr">mantis (23)</span><span lang="en">mantissa (23)</span></span></div><div></div></div>
+          </div>
+          <div class="bits-summary">
+            <div><b id="zero-bits"></b><span lang="tr">/ 32 bit sıfır</span><span lang="en">/ 32 bits are zero</span></div>
+            <div><b id="lead-bits"></b><span lang="tr">baştaki ortak bit</span><span lang="en">leading bits shared</span></div>
+          </div>
+          <p class="note"><span lang="tr">WeightLake bunu 4 MiB'lık chunk'lara uygular: her elemanın k. baytı k. düzleme toplanır, sonra zstd çalışır. Sıfırlarla dolu üst baytlar uzun sıfır dizilerine dönüşür.</span><span lang="en">WeightLake applies this to 4 MiB chunks: byte k of every element goes into plane k, then zstd runs. The mostly-zero high bytes turn into long runs of zeros.</span></p>
+        </div>
+      </div>
+    </section>
+
+    <section class="s" id="numbers">
+      <div class="wrap">
+        <div class="s-head rv">
+          <span class="eyebrow"><span lang="tr">Ölçülmüş · GPT-2 small, 124M parametre, F32</span><span lang="en">Measured · GPT-2 small, 124M parameters, F32</span></span>
+          <h2><span lang="tr">İki sürüm, bir modelin yerinde</span><span lang="en">Two versions in the space of one</span></h2>
+        </div>
+        <div class="numbers rv">
+          <div class="num"><span class="v">0.8<small> s</small></span><span class="k"><span lang="tr">525 MiB'lık modeli import etme</span><span lang="en">to import the 525 MiB model</span></span></div>
+          <div class="num"><span class="v">88<small>%</small></span><span class="k"><span lang="tr">fine-tune'da yeniden kullanılan chunk</span><span lang="en">of chunks reused by the fine-tune</span></span></div>
+          <div class="num"><span class="v">41.5<small> MiB</small></span><span class="k"><span lang="tr">62 MiB değişikliğin diske yazılan hali</span><span lang="en">written to disk for 62 MiB of changes</span></span></div>
+          <div class="num"><span class="v">523<small> MiB</small></span><span class="k"><span lang="tr">iki sürümün toplamı (1,02 GiB yerine)</span><span lang="en">for both versions (instead of 1.02 GiB)</span></span></div>
+        </div>
+        <p class="note numbers-note"><span lang="tr">Dizüstü bir SSD'de CLI ile ölçüldü. İkinci sürüm, 160 tensörden 28'ini değiştiren sentetik bir fine-tune. Gerçek eğitim checkpoint'leri genelde daha küçük güncellemeler içerir, delta oranı veriye göre değişir. Bu bir benchmark değil, hızlı bir doğrulama.</span><span lang="en">Measured with the CLI on a laptop SSD. The second version is a synthetic fine-tune that changes 28 of 160 tensors. Real training checkpoints usually differ by smaller updates, and the delta ratio depends on your data. This is a smoke test, not a benchmark.</span></p>
+      </div>
+    </section>
+
+    <section class="s" id="sql">
+      <div class="wrap">
+        <div class="s-head rv">
+          <span class="eyebrow">SQL · Apache DataFusion</span>
+          <h2><span lang="tr">Modeline soru sor</span><span lang="en">Ask your model questions</span></h2>
+          <p><span lang="tr">Tablolar: <code>commits</code>, <code>refs</code>, <code>tensors</code>, <code>chunks</code>, <code>tensor_chunks</code>. Çıktılar GPT-2 deposunda çalıştırılan gerçek sorgulardan.</span><span lang="en">Tables: <code>commits</code>, <code>refs</code>, <code>tensors</code>, <code>chunks</code>, <code>tensor_chunks</code>. The outputs come from real queries on the GPT-2 repo.</span></p>
+        </div>
+        <div class="rv">
+          <div class="tabs" role="tablist" id="sql-tabs"></div>
+          <div id="sql-panels"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="s" id="api">
+      <div class="wrap">
+        <div class="s-head rv">
+          <span class="eyebrow"><span lang="tr">Tek çekirdek, altı arayüz</span><span lang="en">One core, six interfaces</span></span>
+          <h2><span lang="tr">Kullandığın dilde</span><span lang="en">In the language you use</span></h2>
+          <p><span lang="tr">Hepsi aynı Rust crate'i üzerinde. Python numpy, torch ve pandas döndürür. Node TypedArray ve TypeScript tipleriyle gelir.</span><span lang="en">All on the same Rust crate. Python returns numpy, torch and pandas. Node comes with TypedArrays and TypeScript types.</span></p>
+        </div>
+        <div class="rv">
+          <div class="tabs" role="tablist" id="code-tabs"></div>
+          <div id="code-panels"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="s" id="storage">
+      <div class="wrap">
+        <div class="s-head rv">
+          <span class="eyebrow"><span lang="tr">Depolama motoru</span><span lang="en">Storage engine</span></span>
+          <h2><span lang="tr">Bir import'ta ne olur</span><span lang="en">What happens on import</span></h2>
+        </div>
+        <div class="store rv">
+          <ol class="steps">
+            <li><div><b><span lang="tr">Satırlara böl</span><span lang="en">Split into rows</span></b><p><span lang="tr">Her tensör ~4 MiB'lık chunk'lara, satır sınırından.</span><span lang="en">Each tensor into ~4 MiB chunks, on row boundaries.</span></p></div></li>
+            <li><div><b><span lang="tr">Hash ve istatistik</span><span lang="en">Hash and stats</span></b><p><span lang="tr">BLAKE3 ve chunk istatistikleri tüm çekirdeklerde paralel.</span><span lang="en">BLAKE3 and chunk statistics, in parallel on all cores.</span></p></div></li>
+            <li><div><b><span lang="tr">Tekilleştir</span><span lang="en">Deduplicate</span></b><p><span lang="tr">Hash'i katalogda olan chunk'lar atlanır.</span><span lang="en">Chunks whose hash is already in the catalog are skipped.</span></p></div></li>
+            <li><div><b><span lang="tr">Kodla ve yaz</span><span lang="en">Encode and write</span></b><p><span lang="tr">raw, zstd ya da XOR-zstd olarak yeni, değişmez bir pack dosyasına.</span><span lang="en">As raw, zstd or XOR-zstd into a fresh, immutable pack file.</span></p></div></li>
+            <li><div><b>Commit</b><p><span lang="tr">Manifest ve commit tek bir ACID transaction'la kataloğa girer.</span><span lang="en">Manifest and commit enter the catalog in one ACID transaction.</span></p></div></li>
+          </ol>
+          <div class="tbl">
+            <table class="codecs">
+              <thead><tr><th>codec</th><th><span lang="tr">ne zaman</span><span lang="en">when</span></th><th><span lang="tr">kodlama</span><span lang="en">encoding</span></th></tr></thead>
+              <tbody>
+                <tr><td>raw</td><td><span lang="tr">yeni chunk</span><span lang="en">new chunk</span></td><td><span lang="tr">Olduğu gibi, sıfır kopyalı okuma</span><span lang="en">As is, zero-copy reads</span></td></tr>
+                <tr><td>zstd</td><td><code>compress=true</code></td><td><span lang="tr">Bayt düzlemleri + zstd</span><span lang="en">Byte planes + zstd</span></td></tr>
+                <tr><td>xor-zstd</td><td><span lang="tr">base'i olan değişmiş chunk</span><span lang="en">changed chunk with a base</span></td><td><span lang="tr">Base ile XOR + bayt düzlemleri + zstd</span><span lang="en">XOR with base + byte planes + zstd</span></td></tr>
+              </tbody>
+            </table>
+            <pre class="code" style="margin-top:1.5rem"><span class="c">repo/</span>
+  catalog.redb        <span class="c"># chunks, manifests, commits, refs</span>
+  packs/000001.pack   <span class="c"># immutable, 64-byte aligned, mmap</span>
+  packs/000002.pack</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="s" id="roadmap">
+      <div class="wrap">
+        <div class="s-head rv">
+          <span class="eyebrow"><span lang="tr">Yol haritası</span><span lang="en">Roadmap</span></span>
+          <h2><span lang="tr">Nerede olduğumuz</span><span lang="en">Where it stands</span></h2>
+        </div>
+        <div class="road rv">
+          <div><span class="pill done"><span lang="tr">bitti</span><span lang="en">done</span></span><span><span lang="tr">Depolama çekirdeği: chunk'lama, tekilleştirme, istatistik, safetensors import/export</span><span lang="en">Storage core: chunking, dedup, statistics, safetensors import/export</span></span></div>
+          <div><span class="pill done"><span lang="tr">bitti</span><span lang="en">done</span></span><span><span lang="tr">Sürümleme: commit, branch, log, diff, XOR delta + zstd, gc</span><span lang="en">Versioning: commit, branch, log, diff, XOR delta + zstd, gc</span></span></div>
+          <div><span class="pill done"><span lang="tr">bitti</span><span lang="en">done</span></span><span><span lang="tr">SQL (DataFusion) ve ağırlık seviyesinde fonksiyonlar</span><span lang="en">SQL (DataFusion) and weight-level functions</span></span></div>
+          <div><span class="pill done"><span lang="tr">bitti</span><span lang="en">done</span></span><span><span lang="tr">Rust, C/C++, Python, JavaScript API'leri ve Hugging Face transformers</span><span lang="en">Rust, C/C++, Python and JavaScript APIs, and Hugging Face transformers</span></span></div>
+          <div><span class="pill wip"><span lang="tr">sırada</span><span lang="en">next</span></span><span><span lang="tr">GGUF desteği, PyPI ve npm paketleri</span><span lang="en">GGUF support, PyPI and npm packages</span></span></div>
+          <div><span class="pill next"><span lang="tr">planlı</span><span lang="en">planned</span></span><span><span lang="tr">Sunucu: gRPC + Arrow Flight, repolar arası push / pull, uzaktan SQL</span><span lang="en">Server: gRPC + Arrow Flight, push / pull between repos, remote SQL</span></span></div>
+        </div>
+        <ul class="limits rv">
+          <li><span lang="tr">Bir repo aynı anda tek bir process tarafından açılır.</span><span lang="en">A repo is opened by one process at a time.</span></li>
+          <li><span lang="tr">Şimdilik sadece safetensors. GGUF, <code>.bin</code> ve ONNX için önce dönüştürme gerekir.</span><span lang="en">safetensors only for now. GGUF, <code>.bin</code> and ONNX need converting first.</span></li>
+          <li><span lang="tr">Windows'ta geliştirildi. Linux ve macOS henüz test edilmedi.</span><span lang="en">Developed on Windows. Linux and macOS are not tested yet.</span></li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="s" id="start">
+      <div class="wrap">
+        <div class="closing glass rv">
+          <span class="eyebrow">weightlake.com</span>
+          <h2><span lang="tr">Ağırlıklarını <em>göle</em> bırak.</span><span lang="en">Let your weights into the <em>lake</em>.</span></h2>
+          <p class="lede"><span lang="tr">Açık kaynak, MIT veya Apache-2.0. Rust ile derle, Python'dan ya da terminalden kullan.</span><span lang="en">Open source, MIT or Apache-2.0. Build it with Rust, use it from Python or the terminal.</span></p>
+          <div class="ctas">
+            <a class="btn primary" href="https://github.com/PoyrazAlkan65/weightlake">GitHub →</a>
+            <a class="btn" href="#api"><span lang="tr">Kod örnekleri</span><span lang="en">Code examples</span></a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>WeightLake · MIT OR Apache-2.0 · weightlake.com</span>
+    <a href="https://github.com/PoyrazAlkan65/weightlake">github.com/PoyrazAlkan65/weightlake</a>
+  </div>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function () {
+  "use strict";
+  var root = document.documentElement;
+  var reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ================= language ================= */
+  function setLang(l) {
+    root.setAttribute("lang", l);
+    document.querySelectorAll(".seg button").forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.lang === l)); });
+    try { localStorage.setItem("wl-lang", l); } catch (e) {}
+  }
+  var saved = null;
+  try { saved = localStorage.getItem("wl-lang"); } catch (e) {}
+  setLang(saved || ((navigator.language || "").toLowerCase().indexOf("tr") === 0 ? "tr" : "en"));
+  document.querySelectorAll(".seg button").forEach(function (b) { b.addEventListener("click", function () { setLang(b.dataset.lang); }); });
+
+  /* ================= copy ================= */
+  document.getElementById("copy-install").addEventListener("click", function () {
+    var code = document.getElementById("install-cmd"), btn = this;
+    function done() { btn.dataset.old = btn.dataset.old || btn.innerHTML; btn.textContent = "✓"; setTimeout(function () { btn.innerHTML = btn.dataset.old; }, 1400); }
+    function select() { var r = document.createRange(); r.selectNodeContents(code); var s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(code.textContent).then(done, select);
+    else select();
+  });
+
+  /* ================= reveal ================= */
+  var rvs = [].slice.call(document.querySelectorAll(".rv"));
+  if (!reduce && "IntersectionObserver" in window) {
+    var io = new IntersectionObserver(function (es) {
+      es.forEach(function (e) { if (e.isIntersecting) { e.target.classList.remove("pending"); io.unobserve(e.target); } });
+    }, { rootMargin: "0px 0px -8% 0px", threshold: 0.08 });
+    rvs.forEach(function (el) {
+      // only elements below the first screen wait for their entrance
+      if (el.getBoundingClientRect().top > innerHeight) { el.classList.add("pending"); io.observe(el); }
+    });
+  }
+
+  /* ================= story progress ================= */
+  var chapters = [0, 1, 2, 3, 4].map(function (i) { return document.getElementById("ch-" + i); });
+  var railLinks = [].slice.call(document.querySelectorAll("#rail a"));
+  var rail = document.getElementById("rail"), bar = document.getElementById("top-bar");
+  var content = document.getElementById("content");
+  var targetP = 0;
+  function measure() {
+    var mid = scrollY + innerHeight * 0.5;
+    var p = 0;
+    for (var i = 0; i < chapters.length; i++) {
+      var c = chapters[i], top = c.offsetTop, h = c.offsetHeight;
+      var center = top + h * 0.5;
+      if (mid >= center) p = i;
+      if (i < chapters.length - 1) {
+        var nextCenter = chapters[i + 1].offsetTop + chapters[i + 1].offsetHeight * 0.5;
+        if (mid >= center && mid < nextCenter) p = i + (mid - center) / (nextCenter - center);
+      }
+    }
+    targetP = Math.max(0, Math.min(4, p));
+    var on = Math.round(targetP);
+    railLinks.forEach(function (a, j) { a.classList.toggle("on", j === on); });
+    rail.classList.toggle("gone", content.getBoundingClientRect().top < innerHeight * 0.6);
+    bar.classList.toggle("solid", scrollY > 40);
+  }
+  addEventListener("scroll", measure, { passive: true });
+  addEventListener("resize", measure);
+  measure();
+
+  /* ================= XOR bits ================= */
+  var BASE = -0.14395315945148468, REAL_FT = -0.14214132726192474;
+  var dv = new DataView(new ArrayBuffer(4));
+  function bitsOf(x) { dv.setFloat32(0, x); return dv.getUint32(0) >>> 0; }
+  function draw(el, u) {
+    var html = "";
+    for (var i = 31; i >= 0; i--) {
+      var bit = (u >>> i) & 1, pos = 31 - i;
+      html += '<span class="b' + (bit ? " one" : "") + (pos === 0 ? " s1" : "") + (pos === 8 ? " e8" : "") + '">' + bit + "</span>";
+    }
+    el.innerHTML = html;
+  }
+  var mag = document.getElementById("mag"), realBtn = document.getElementById("real-pair");
+  var realMag = Math.log10(Math.abs((REAL_FT - BASE) / BASE)).toFixed(1);
+  function renderBits(useReal) {
+    var a = Math.fround(BASE);
+    var b = useReal ? Math.fround(REAL_FT) : Math.fround(a * (1 + Math.pow(10, +mag.value)));
+    var ua = bitsOf(a), ub = bitsOf(b), ux = (ua ^ ub) >>> 0;
+    draw(document.getElementById("bits-a"), ua);
+    draw(document.getElementById("bits-b"), ub);
+    draw(document.getElementById("bits-x"), ux);
+    document.getElementById("val-a").textContent = a.toPrecision(8);
+    document.getElementById("val-b").textContent = b.toPrecision(8);
+    document.getElementById("val-x").textContent = "0x" + ux.toString(16).toUpperCase().padStart(8, "0");
+    var ones = 0; for (var i = 0; i < 32; i++) ones += (ux >>> i) & 1;
+    document.getElementById("zero-bits").textContent = 32 - ones;
+    document.getElementById("lead-bits").textContent = ux === 0 ? 32 : Math.clz32(ux);
+    var rel = Math.abs((b - a) / a);
+    document.getElementById("mag-label").textContent = rel === 0 ? "0" : rel.toExponential(1);
+    realBtn.setAttribute("aria-pressed", String(!!useReal));
+  }
+  mag.value = realMag;
+  mag.addEventListener("input", function () { renderBits(false); });
+  realBtn.addEventListener("click", function () { mag.value = realMag; renderBits(true); });
+  renderBits(true);
+
+  /* ================= tabs ================= */
+  function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+  function bi(tr, en) { return '<span lang="tr">' + tr + '</span><span lang="en">' + en + "</span>"; }
+  function tabs(tabsEl, panelsEl, items, prefix) {
+    items.forEach(function (it, i) {
+      var b = document.createElement("button");
+      b.type = "button"; b.setAttribute("role", "tab"); b.id = prefix + "-tab-" + i;
+      b.setAttribute("aria-controls", prefix + "-panel-" + i); b.textContent = it.label;
+      tabsEl.appendChild(b);
+      var p = document.createElement("div");
+      p.className = "panel"; p.setAttribute("role", "tabpanel"); p.id = prefix + "-panel-" + i;
+      p.setAttribute("aria-labelledby", b.id); p.innerHTML = it.html;
+      panelsEl.appendChild(p);
+      b.addEventListener("click", function () { select(i); });
+    });
+    function select(i) {
+      tabsEl.querySelectorAll("button").forEach(function (b, j) { b.setAttribute("aria-selected", String(i === j)); b.tabIndex = i === j ? 0 : -1; });
+      panelsEl.querySelectorAll(".panel").forEach(function (p, j) { p.hidden = i !== j; });
+    }
+    tabsEl.addEventListener("keydown", function (e) {
+      var cur = [].indexOf.call(tabsEl.children, document.activeElement);
+      if (cur < 0) return;
+      var n = e.key === "ArrowRight" ? cur + 1 : e.key === "ArrowLeft" ? cur - 1 : null;
+      if (n === null) return;
+      n = (n + items.length) % items.length; select(n); tabsEl.children[n].focus();
+    });
+    select(0);
+  }
+
+  var sql = [
+    { label: "top norms", desc: bi("En büyük normlu attention matrisleri. Cevap chunk indeksinden gelir, ağırlık okunmaz.", "Largest-norm attention matrices. The answer comes from the chunk index; no weights are read."),
+      q: "SELECT name, shape, round(l2, 2) AS l2 FROM tensors\nWHERE commit_id = rev('main') AND role = 'attention' AND ndim = 2\nORDER BY l2 DESC LIMIT 5;",
+      out: "+------------------------+-------------+--------+\n| name                   | shape       | l2     |\n+------------------------+-------------+--------+\n| h.0.attn.c_attn.weight | [768, 2304] | 265.54 |\n| h.2.attn.c_attn.weight | [768, 2304] | 203.08 |\n| h.4.attn.c_attn.weight | [768, 2304] | 194.79 |\n| h.3.attn.c_attn.weight | [768, 2304] | 188.63 |\n| h.1.attn.c_attn.weight | [768, 2304] | 186.31 |\n+------------------------+-------------+--------+" },
+    { label: "drift", desc: bi("Fine-tune hangi tensörleri ne kadar değiştirdi: ‖ft − main‖ / ‖main‖.", "Which tensors the fine-tune moved, and how far: ‖ft − main‖ / ‖main‖."),
+      q: "SELECT b.name, round(tensor_rel_l2('main', 'ft', b.name), 5) AS drift\nFROM tensors a JOIN tensors b ON a.name = b.name\nWHERE a.commit_id = rev('main') AND b.commit_id = rev('ft') AND a.mean <> b.mean\nORDER BY drift DESC LIMIT 5;",
+      out: "+----------------------+---------+\n| name                 | drift   |\n+----------------------+---------+\n| h.11.ln_2.bias       | 0.02557 |\n| h.10.ln_2.bias       | 0.01956 |\n| h.10.ln_1.bias       | 0.01752 |\n| h.11.ln_1.bias       | 0.01615 |\n| h.11.mlp.c_proj.bias | 0.00907 |\n+----------------------+---------+" },
+    { label: "params by role", desc: bi("Rol başına parametre sayısı ve boyut. Roller tensör adından çıkarılır.", "Parameter count and size per role. Roles are inferred from tensor names."),
+      q: "SELECT role, sum(numel) AS params, sum(nbytes) AS bytes FROM tensors\nWHERE commit_id = rev('main') GROUP BY role ORDER BY params DESC;",
+      out: "+-----------+----------+-----------+\n| role      | params   | bytes     |\n+-----------+----------+-----------+\n| mlp       | 56669184 | 226676736 |\n| attention | 40931328 | 163725312 |\n| embedding | 39383808 | 157535232 |\n| norm      | 38400    | 153600    |\n+-----------+----------+-----------+" },
+    { label: "one weight", desc: bi("Tek bir ağırlık, iki sürümde. Her biri için sadece onu içeren chunk çözülür.", "One weight in two versions. Only the chunk holding each value is decoded."),
+      q: "SELECT weight('main', 'h.11.mlp.c_fc.weight', 0) AS base,\n       weight('ft',   'h.11.mlp.c_fc.weight', 0) AS ft;",
+      out: "+----------------------+----------------------+\n| base                 | ft                   |\n+----------------------+----------------------+\n| -0.14395315945148468 | -0.14214132726192474 |\n+----------------------+----------------------+" }
+  ];
+  tabs(document.getElementById("sql-tabs"), document.getElementById("sql-panels"), sql.map(function (s) {
+    return { label: s.label, html: "<p>" + s.desc + '</p><pre class="code">' + esc(s.q) + '</pre><pre class="out">' + esc(s.out) + "</pre>" };
+  }), "sql");
+
+  var code = [
+    { label: "Python", src: "import weightlake\n\ndb = weightlake.open(\"repo\", create=True)\ndb.import_model(\"gpt2\", message=\"base\")\n\nw  = db.read_tensor(\"h.0.attn.c_attn.weight\")          # numpy\nx  = db.weight(\"h.0.attn.c_attn.weight\", 12345)        # one value, one chunk\nsd = db.state_dict(\"main\", framework=\"torch\")\ndf = db.sql_df(\"SELECT name, l2 FROM tensors WHERE commit_id = rev('main')\")\n\ndb.commit_state_dict(model.state_dict(), message=\"step 1000\")   # from RAM, no files" },
+    { label: "transformers", src: "import weightlake, weightlake.hf as whf\n\ndb = weightlake.open(\"repo\", create=True)\nwhf.save_pretrained(db, model, tokenizer=tok, message=\"base\")\n\n# ... training ...\nwhf.save_pretrained(db, model, branch=\"ft\", base=\"main\", message=\"epoch 1\")\n\nmodel = whf.from_pretrained(db, \"ft\")      # class from config.architectures\ntok   = whf.load_tokenizer(db, \"ft\")" },
+    { label: "CLI", src: "wlake -R repo init\nwlake -R repo import ./gpt2 -m \"gpt2 base\"\nwlake -R repo import ./gpt2-ft -b ft --base main -m \"fine-tune\"\nwlake -R repo diff main ft --numeric\nwlake -R repo show main h.0.attn.c_attn.weight\nwlake -R repo sql \"SELECT codec, count(*) FROM chunks GROUP BY codec\"\nwlake -R repo stats\nwlake -R repo export ft ./out          # byte-identical files" },
+    { label: "Rust", src: "use weightlake::{Database, ImportOptions};\n\nlet db = Database::open_or_init(\"repo\")?;\ndb.import(\"gpt2\", &ImportOptions { message: \"base\".into(), ..Default::default() })?;\n\nlet t = db.read_tensor(\"main\", \"h.0.attn.c_attn.weight\")?;   // t.data: LE bytes\nlet x = db.read_weight(\"main\", \"h.0.attn.c_attn.weight\", 42)?;\nlet rows = db.sql_json(\"SELECT name, l2 FROM tensors WHERE commit_id = rev('main')\")?;" },
+    { label: "C++", src: "#include \"weightlake.hpp\"\n\nauto db = weightlake::Database::open(\"repo\");\nstd::vector<float> w = db.read_tensor<float>(\"main\", \"h.0.attn.c_attn.weight\");\nstd::cout << db.sql_pretty(\"SELECT role, count(*) FROM tensors GROUP BY role\");\n\n// C: wl_open, wl_read_tensor, wl_sql_json ... return 0 / -1, wl_last_error()" },
+    { label: "Node", src: "const weightlake = require('weightlake');\n\nconst db = weightlake.open('repo', { create: true });\ndb.importModel('gpt2', { message: 'base' });\n\nconst { data, shape } = db.readTensor('h.0.attn.c_attn.weight');   // Float32Array\nconst drift = db.sql(\"SELECT tensor_rel_l2('main', 'ft', 'h.11.mlp.c_fc.weight') AS d\");" }
+  ];
+  function hl(src) { return esc(src).replace(/(^|\s)(#\s[^\n]*|\/\/[^\n]*)/g, '$1<span class="c">$2</span>'); }
+  tabs(document.getElementById("code-tabs"), document.getElementById("code-panels"), code.map(function (c) {
+    return { label: c.label, html: '<pre class="code">' + hl(c.src) + "</pre>" };
+  }), "code");
+
+  /* ================= 3D lake ================= */
+  var canvas = document.getElementById("scene");
+  var renderer;
+  try {
+    if (!window.THREE) throw new Error("three.js not loaded");
+    renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, powerPreference: "high-performance" });
+  } catch (e) {
+    root.classList.add("no-webgl");
+    return;
+  }
+  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+  renderer.setClearColor(0x050d12, 1);
+
+  var scene = new THREE.Scene();
+  scene.fog = new THREE.FogExp2(0x050d12, 0.022);
+  var camera = new THREE.PerspectiveCamera(42, 1, 0.1, 400);
+
+  scene.add(new THREE.HemisphereLight(0x9fe9e2, 0x061017, 0.75));
+  var key = new THREE.DirectionalLight(0xffffff, 0.9); key.position.set(-20, 40, 18); scene.add(key);
+  var rim = new THREE.DirectionalLight(0xf2b45a, 0.35); rim.position.set(30, 10, -30); scene.add(rim);
+
+  var small = innerWidth < 820;
+  var G = small ? 30 : 40;          // grid is G x G cells
+  var CH = G / 5;                   // 5 x 5 chunks
+  var N = G * G;
+  var geo = new THREE.BoxGeometry(0.78, 1, 0.78); geo.translate(0, 0.5, 0);
+  var mat = new THREE.MeshStandardMaterial({ roughness: 0.38, metalness: 0.25 });
+  var mesh = new THREE.InstancedMesh(geo, mat, N);
+  mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  scene.add(mesh);
+
+  // per-instance constants
+  var gx = new Float32Array(N), gz = new Float32Array(N), cid = new Int32Array(N), w = new Float32Array(N);
+  var DELTA = { 3: 1, 8: 1, 12: 1, 21: 1 };                    // chunks changed by the "fine-tune"
+  var PILLARS = { 6: 265.54, 11: 203.08, 17: 194.79, 13: 188.63, 23: 186.31 }; // real GPT-2 attention L2
+  var GAP = 1.5, half = (G - 1) / 2, halfGap = (G - 1 + 4 * GAP) / 2;
+  for (var i = 0; i < N; i++) {
+    var x = i % G, z = (i / G) | 0;
+    gx[i] = x; gz[i] = z;
+    cid[i] = ((x / CH) | 0) * 5 + ((z / CH) | 0);
+    var r = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453; r -= Math.floor(r);
+    w[i] = 0.55 * r + 0.45 * (0.5 + 0.5 * Math.sin(x * 0.45) * Math.cos(z * 0.38));
+  }
+
+  function hex(h) { return [((h >> 16) & 255) / 255, ((h >> 8) & 255) / 255, (h & 255) / 255]; }
+  var C = { deep: hex(0x0d3440), aqua: hex(0x6fe3d6), bright: hex(0xa8fff4), amber: hex(0xf2b45a), shared: hex(0x1f3b45), dim: hex(0x0b2028), calm: hex(0x2c7a80) };
+  function mix(a, b, t) { return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]; }
+
+  // state k -> [x, y, z, height, r, g, b]
+  var out = [new Float32Array(7), new Float32Array(7)];
+  function state(k, i, t, o) {
+    var x = gx[i], z = gz[i], cx = (x / CH) | 0, cz = (z / CH) | 0;
+    var px, pz, py = 0, h, col;
+    var wave = 0.5 + 0.5 * Math.sin(0.32 * x + t * 0.9) * Math.cos(0.27 * z + t * 0.7);
+    if (k === 0 || k === 4) {
+      px = x - half; pz = z - half;
+      if (k === 0) { h = 0.25 + 0.75 * wave * (0.6 + 0.4 * w[i]); col = mix(C.deep, C.aqua, wave * 0.85); }
+      else { h = 0.12 + 0.35 * wave; col = mix(C.dim, C.calm, wave * 0.7); }
+    } else {
+      px = x + cx * GAP - halfGap; pz = z + cz * GAP - halfGap;
+      var base = 0.3 + w[i] * 2.4;
+      if (k === 1) { h = base; col = mix(C.deep, C.aqua, w[i]); }
+      else if (k === 2) {
+        if (DELTA[cid[i]]) { h = base; py = 3.6 + 0.25 * Math.sin(t * 1.6 + x * 0.3); col = mix(C.amber, [1, 0.85, 0.6], w[i] * 0.4); }
+        else { h = base * 0.55; col = C.shared; }
+      } else {
+        var l2 = PILLARS[cid[i]];
+        if (l2) { h = (l2 / 265.54) * 11 * (0.75 + 0.25 * w[i]); col = mix(C.aqua, C.bright, w[i]); }
+        else { h = 0.14; col = C.dim; }
+      }
+    }
+    o[0] = px; o[1] = py; o[2] = pz; o[3] = h; o[4] = col[0]; o[5] = col[1]; o[6] = col[2];
+  }
+
+  // camera per state: position, look-at
+  var CAM = [
+    [[6, 8, 30], [-9, 1, 0]],
+    [[10, 28, 28], [-8, 0, 0]],
+    [[26, 20, 26], [-6, 2, 0]],
+    [[-4, 13, 32], [-9, 4, 0]],
+    [[0, 36, 16], [0, 0, 0]]
+  ];
+  if (small) CAM = CAM.map(function (c) { return [[c[0][0] * 0.6, c[0][1] * 1.1, c[0][2] * 1.05], [0, c[1][1], 0]]; });
+
+  function smooth(t) { return t * t * (3 - 2 * t); }
+  var m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), pos = new THREE.Vector3(), scl = new THREE.Vector3(), col = new THREE.Color();
+  var camPos = new THREE.Vector3(), look = new THREE.Vector3();
+  var p = targetP, mouseX = 0, mouseY = 0, mx = 0, my = 0, t0 = performance.now();
+
+  addEventListener("pointermove", function (e) { mouseX = e.clientX / innerWidth - 0.5; mouseY = e.clientY / innerHeight - 0.5; }, { passive: true });
+
+  function resize() {
+    var wdt = innerWidth, hgt = innerHeight;
+    renderer.setSize(wdt, hgt, false);
+    camera.aspect = wdt / hgt; camera.updateProjectionMatrix();
+  }
+  addEventListener("resize", resize); resize();
+
+  function frame(now) {
+    var t = reduce ? 0 : (now - t0) / 1000;
+    p += (targetP - p) * (reduce ? 1 : 0.07);
+    var k = Math.min(3, Math.floor(p)), f = smooth(Math.min(1, p - k));
+    var A = out[0], B = out[1];
+    for (var i = 0; i < N; i++) {
+      state(k, i, t, A); state(k + 1, i, t, B);
+      // stagger the morph by chunk so blocks move one after another
+      var st = Math.max(0, Math.min(1, f * 1.6 - (cid[i] % 5) * 0.12));
+      var u = f === 0 || f === 1 ? f : st;
+      pos.set(A[0] + (B[0] - A[0]) * u, A[1] + (B[1] - A[1]) * u, A[2] + (B[2] - A[2]) * u);
+      scl.set(1, Math.max(0.02, A[3] + (B[3] - A[3]) * u), 1);
+      m4.compose(pos, q, scl);
+      mesh.setMatrixAt(i, m4);
+      col.setRGB(A[4] + (B[4] - A[4]) * u, A[5] + (B[5] - A[5]) * u, A[6] + (B[6] - A[6]) * u);
+      mesh.setColorAt(i, col);
+    }
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+
+    var ca = CAM[k], cb = CAM[k + 1];
+    camPos.set(ca[0][0] + (cb[0][0] - ca[0][0]) * f, ca[0][1] + (cb[0][1] - ca[0][1]) * f, ca[0][2] + (cb[0][2] - ca[0][2]) * f);
+    look.set(ca[1][0] + (cb[1][0] - ca[1][0]) * f, ca[1][1] + (cb[1][1] - ca[1][1]) * f, ca[1][2] + (cb[1][2] - ca[1][2]) * f);
+    mx += (mouseX - mx) * 0.05; my += (mouseY - my) * 0.05;
+    if (!reduce) { camPos.x += mx * 4; camPos.y -= my * 2.5; camPos.x += Math.sin(t * 0.15) * 1.2; }
+    camera.position.copy(camPos); camera.lookAt(look);
+
+    renderer.render(scene, camera);
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>

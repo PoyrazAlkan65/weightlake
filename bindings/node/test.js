@@ -4,7 +4,7 @@ const assert = require('assert');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const weightdb = require('./index.js');
+const weightlake = require('./index.js');
 
 function readSafetensorsF32(file, name) {
   const raw = fs.readFileSync(file);
@@ -17,10 +17,10 @@ function readSafetensorsF32(file, name) {
 
 const model = process.argv[2];
 const finetune = process.argv[3];
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'wdb-node-'));
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'wl-node-'));
 try {
-  const db = weightdb.open(path.join(tmp, 'repo'), { create: true });
-  console.log('weightdb', weightdb.version);
+  const db = weightlake.open(path.join(tmp, 'repo'), { create: true });
+  console.log('weightlake', weightlake.version);
   const r = db.importModel(model, { message: 'base' });
   console.log('import:', r.commit.id.slice(0, 12), r.stats);
   if (finetune) {

@@ -1,16 +1,16 @@
 [package]
-name = "wdb-capi"
-description = "WeightDB C ABI (weightdb.dll / libweightdb.so) for C and C++"
+name = "wl-capi"
+description = "WeightLake C ABI (weightlake.dll / libweightlake.so) for C and C++"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [lib]
-name = "weightdb"
+name = "weightlake"
 crate-type = ["cdylib", "staticlib"]
 
 [dependencies]
-wdb = { package = "weightdb", path = "../../crates/weightdb" }
+wl = { package = "weightlake", path = "../../crates/weightlake" }
 anyhow.workspace = true
 serde.workspace = true
 serde_json.workspace = true

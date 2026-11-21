@@ -1,6 +1,6 @@
-// Build (MinGW):  g++ -std=c++17 -O2 example.cpp -I../include -L<target>/release -lweightdb -o example
+// Build (MinGW):  g++ -std=c++17 -O2 example.cpp -I../include -L<target>/release -lweightlake -o example
 // Usage:          example <repo> <rev> <tensor>
-#include "weightdb.hpp"
+#include "weightlake.hpp"
 
 #include <cmath>
 #include <cstdio>
@@ -12,8 +12,8 @@ int main(int argc, char** argv) {
         return 2;
     }
     try {
-        auto db = weightdb::Database::open(argv[1]);
-        std::cout << "weightdb " << wdb_version() << ", " << argv[2] << " = " << db.resolve(argv[2]).substr(0, 12)
+        auto db = weightlake::Database::open(argv[1]);
+        std::cout << "weightlake " << wl_version() << ", " << argv[2] << " = " << db.resolve(argv[2]).substr(0, 12)
                   << "\n";
 
         auto info = db.tensor_info(argv[2], argv[3]);
@@ -39,10 +39,10 @@ int main(int argc, char** argv) {
 
         try {
             db.read_weight(argv[2], "no.such.tensor", 0);
-        } catch (const weightdb::Error& e) {
+        } catch (const weightlake::Error& e) {
             std::cout << "expected error: " << e.what() << "\n";
         }
-    } catch (const weightdb::Error& e) {
+    } catch (const weightlake::Error& e) {
         std::cerr << "error: " << e.what() << "\n";
         return 1;
     }

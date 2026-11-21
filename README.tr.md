@@ -1,15 +1,15 @@
-# WeightDB
+# WeightLake
 
-**Sinir ağı ağırlıkları için gömülü bir veritabanı.** WeightDB model ağırlıklarını kapalı dosyalar olarak değil, *veri* olarak saklar.
+**Sinir ağı ağırlıkları için gömülü bir veritabanı.** WeightLake model ağırlıklarını kapalı dosyalar olarak değil, *veri* olarak saklar.
 Modeller Git gibi sürümlenir (commit, branch, diff), sürümler arasında tekilleştirilir ve delta ile sıkıştırılır, ve tek bir ağırlığa kadar SQL ile sorgulanabilir.
 Çekirdek Rust ile yazıldı. **Rust, C/C++, Python ve JavaScript** için native API'ler var.
 
 > 🇬🇧 English: [README.md](README.md)
 
 ```python
-import weightdb, weightdb.hf as whf
+import weightlake, weightlake.hf as whf
 
-db = weightdb.open("repo", create=True)
+db = weightlake.open("repo", create=True)
 whf.save_pretrained(db, model, tokenizer=tok, message="base")              # model -> sürüm, dosya yok
 # ... fine-tune ...
 whf.save_pretrained(db, model, branch="ft", base="main", message="ep 1")   # sadece değişen chunk'lar, XOR delta olarak
@@ -51,7 +51,7 @@ Model checkpoint'leri genelde büyük ikili dosyalar olarak taşınır.
 7B'lik bir modelin on fine-tune'u, katmanların çoğu değişmemiş olsa bile, ~14 GB'lık on kopya demektir.
 "Hangi katmanlar en çok değişti?" sorusunu cevaplamak için her checkpoint'i bir framework'e yüklemek gerekir.
 
-WeightDB checkpoint'i yapılandırılmış veri olarak ele alır:
+WeightLake checkpoint'i yapılandırılmış veri olarak ele alır:
 
 - **Her bayt bir kez saklanır.** Ağırlıklar içerik-adresli chunk'lara bölünür. 50 sürümde değişmeyen bir katman tek kez saklanır.
 - **Değişiklikler delta olarak saklanır.** Değişen bir chunk, base sürümdeki aynı chunk ile XOR'lanıp sıkıştırılır. Fine-tune edilmiş ağırlıklar işaret, üs ve yüksek mantis bitlerinin çoğunu base ile paylaşır, bu yüzden XOR sonucu çoğunlukla sıfırdır.
@@ -63,7 +63,7 @@ WeightDB checkpoint'i yapılandırılmış veri olarak ele alır:
 
 MongoDB ya da Git biliyorsan şu eşleme işin çoğunu anlatır:
 
-| MongoDB    | Git        | WeightDB   | Ne |
+| MongoDB    | Git        | WeightLake   | Ne |
 |------------|------------|------------|----|
 | Database   | Repository | **Repo**   | Bir model ailesini ve tüm sürümlerini tutan dizin |
 | Collection | —          | **Tensör** | Bir ağırlık matrisi, ör. `h.0.attn.c_attn.weight` |
@@ -108,10 +108,10 @@ Bu sayıları kapsamlı bir benchmark olarak değil, hızlı bir doğrulama olar
 
 ## Başlangıç
 
-WeightDB henüz crates.io, PyPI ya da npm'de yayınlanmadı. Kaynaktan derlenir (bkz. [Kaynaktan derleme](#kaynaktan-derleme)):
+WeightLake henüz crates.io, PyPI ya da npm'de yayınlanmadı. Kaynaktan derlenir (bkz. [Kaynaktan derleme](#kaynaktan-derleme)):
 
 ```sh
-git clone https://github.com/PoyrazAlkan65/weightdb && cd weightdb
+git clone https://github.com/PoyrazAlkan65/weightlake && cd weightlake
 cargo build --release --workspace
 scripts/build-bindings.sh          # .pyd/.so, .node ve C kütüphanesini paket dizinlerine koyar
 ```
@@ -119,9 +119,9 @@ scripts/build-bindings.sh          # .pyd/.so, .node ve C kütüphanesini paket 
 Sonra:
 
 ```sh
-./target/release/wdb -R repo init
-./target/release/wdb -R repo import path/to/hf-model-dir -m "base"
-./target/release/wdb -R repo ls main
+./target/release/wlake -R repo init
+./target/release/wlake -R repo import path/to/hf-model-dir -m "base"
+./target/release/wlake -R repo ls main
 ```
 
 Python paketini checkout'tan kullanmak için `bindings/python` dizinini `PYTHONPATH`'e ekle ya da `maturin build -m bindings/python/Cargo.toml --release` ile wheel üret.
@@ -130,7 +130,7 @@ Node için `require('./bindings/node')`.
 ## CLI
 
 ```
-wdb [-R <repo>] [--json] <komut>
+wlake [-R <repo>] [--json] <komut>
 ```
 
 `-R` repo dizinini seçer (varsayılan: bulunduğun dizin). `--json` her komut için makine-okunur çıktı verir.
@@ -151,26 +151,26 @@ wdb [-R <repo>] [--json] <komut>
 | `gc [--dry-run]` | Hiçbir branch'ten erişilemeyen sürümleri siler, pack dosyalarını sıkıştırır |
 
 ```sh
-wdb -R repo init
-wdb -R repo import ./gpt2 -m "gpt2 base"
-wdb -R repo import ./gpt2-ft -b ft --base main -m "fine-tune"   # main'e göre delta
-wdb -R repo log ft
-wdb -R repo ls main --role attention
-wdb -R repo show main h.0.attn.c_attn.weight
-wdb -R repo get main h.0.attn.c_attn.weight 0 1 2
-wdb -R repo diff main ft --numeric
-wdb -R repo sql "SELECT role, count(*), sum(nbytes) FROM tensors WHERE commit_id = rev('main') GROUP BY role"
-wdb -R repo stats
-wdb -R repo branch -d ft && wdb -R repo gc
-wdb -R repo export main ./out
+wlake -R repo init
+wlake -R repo import ./gpt2 -m "gpt2 base"
+wlake -R repo import ./gpt2-ft -b ft --base main -m "fine-tune"   # main'e göre delta
+wlake -R repo log ft
+wlake -R repo ls main --role attention
+wlake -R repo show main h.0.attn.c_attn.weight
+wlake -R repo get main h.0.attn.c_attn.weight 0 1 2
+wlake -R repo diff main ft --numeric
+wlake -R repo sql "SELECT role, count(*), sum(nbytes) FROM tensors WHERE commit_id = rev('main') GROUP BY role"
+wlake -R repo stats
+wlake -R repo branch -d ft && wlake -R repo gc
+wlake -R repo export main ./out
 ```
 
 ## Python
 
 ```python
-import weightdb
+import weightlake
 
-db = weightdb.open("repo", create=True)          # ya da weightdb.init("repo")
+db = weightlake.open("repo", create=True)          # ya da weightlake.init("repo")
 
 # sürümler
 r = db.import_model("gpt2", message="base")       # dosya veya dizin; import raporunu döner
@@ -205,18 +205,18 @@ db.stats(); db.gc(dry_run=True)
 GPU'daki ya da bitişik olmayan tensörler önce bitişik CPU belleğine kopyalanır, big-endian numpy dizileri little-endian'a çevrilir.
 Rust çekirdeği buffer'ları yerinde okur, hash ve sıkıştırma sırasında GIL'i bırakır.
 
-Hatalar `weightdb.WeightDBError` (bir `RuntimeError`) olarak fırlatılır.
+Hatalar `weightlake.WeightLakeError` (bir `RuntimeError`) olarak fırlatılır.
 
 ### Hugging Face transformers
 
-`weightdb.hf` ağırlıkları RAM'deki bir `transformers` modeli ile veritabanı arasında doğrudan taşır. `.safetensors` dosyası yazılmaz.
+`weightlake.hf` ağırlıkları RAM'deki bir `transformers` modeli ile veritabanı arasında doğrudan taşır. `.safetensors` dosyası yazılmaz.
 Yalnızca küçük yan dosyalar (`config.json`, tokenizer dosyaları) geçici bir dizinden geçer, çünkü transformers bunları dosya yolundan okur.
 
 ```python
-import torch, weightdb, weightdb.hf as whf
+import torch, weightlake, weightlake.hf as whf
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-db = weightdb.open("repo", create=True)
+db = weightlake.open("repo", create=True)
 
 model = AutoModelForCausalLM.from_pretrained("gpt2")
 tok = AutoTokenizer.from_pretrained("gpt2")
@@ -241,7 +241,7 @@ Bilmen gerekenler:
 ## Rust
 
 ```rust
-use weightdb::{Database, ImportOptions, MemTensor, DType};
+use weightlake::{Database, ImportOptions, MemTensor, DType};
 
 let db = Database::open_or_init("repo")?;
 let r = db.import("gpt2", &ImportOptions { message: "base".into(), ..Default::default() })?;
@@ -281,46 +281,46 @@ db.import_tensors(
 
 ## C ve C++
 
-`weightdb.dll` / `libweightdb.so` / `libweightdb.dylib` ile linkle ve `bindings/c/include/weightdb.h` (C) ya da `weightdb.hpp` (C++17, sadece header'dan oluşan RAII sarmalayıcı) dosyasını ekle.
+`weightlake.dll` / `libweightlake.so` / `libweightlake.dylib` ile linkle ve `bindings/c/include/weightlake.h` (C) ya da `weightlake.hpp` (C++17, sadece header'dan oluşan RAII sarmalayıcı) dosyasını ekle.
 
 ```c
-#include "weightdb.h"
+#include "weightlake.h"
 
-wdb_db* db;
-if (wdb_open_or_init("repo", &db) != 0) { fprintf(stderr, "%s\n", wdb_last_error()); return 1; }
+wl_db* db;
+if (wl_open_or_init("repo", &db) != 0) { fprintf(stderr, "%s\n", wl_last_error()); return 1; }
 
-wdb_tensor_info_t info;
-wdb_tensor_info(db, "main", "h.0.attn.c_attn.weight", &info);
+wl_tensor_info_t info;
+wl_tensor_info(db, "main", "h.0.attn.c_attn.weight", &info);
 float* buf = malloc(info.nbytes);
-wdb_read_tensor(db, "main", "h.0.attn.c_attn.weight", buf, info.nbytes);
+wl_read_tensor(db, "main", "h.0.attn.c_attn.weight", buf, info.nbytes);
 
 char* json;
-wdb_sql_json(db, "SELECT name, l2 FROM tensors WHERE commit_id = rev('main')", &json);
+wl_sql_json(db, "SELECT name, l2 FROM tensors WHERE commit_id = rev('main')", &json);
 puts(json);
-wdb_string_free(json);
-wdb_close(db);
+wl_string_free(json);
+wl_close(db);
 ```
 
-Her fonksiyon başarıda `0`, hatada `-1` döner. `wdb_last_error()` o thread'deki hata mesajını verir.
-`char**` ile dönen string'ler `wdb_string_free` ile serbest bırakılmalıdır.
-Fonksiyonlar: `wdb_open/init/open_or_init/close`, `wdb_import`, `wdb_export`, `wdb_resolve`, `wdb_log_json`, `wdb_branches_json`, `wdb_create_branch`, `wdb_delete_branch`, `wdb_tensors_json`, `wdb_tensor_info(_json)`, `wdb_read_tensor`, `wdb_read_weight`, `wdb_diff_json`, `wdb_sql_json`, `wdb_sql_pretty`, `wdb_stats_json`, `wdb_gc_json`, `wdb_version`.
+Her fonksiyon başarıda `0`, hatada `-1` döner. `wl_last_error()` o thread'deki hata mesajını verir.
+`char**` ile dönen string'ler `wl_string_free` ile serbest bırakılmalıdır.
+Fonksiyonlar: `wl_open/init/open_or_init/close`, `wl_import`, `wl_export`, `wl_resolve`, `wl_log_json`, `wl_branches_json`, `wl_create_branch`, `wl_delete_branch`, `wl_tensors_json`, `wl_tensor_info(_json)`, `wl_read_tensor`, `wl_read_weight`, `wl_diff_json`, `wl_sql_json`, `wl_sql_pretty`, `wl_stats_json`, `wl_gc_json`, `wl_version`.
 
 ```cpp
-#include "weightdb.hpp"
+#include "weightlake.hpp"
 
-auto db = weightdb::Database::open("repo");
+auto db = weightlake::Database::open("repo");
 std::vector<float> w = db.read_tensor<float>("main", "h.0.attn.c_attn.weight");
 std::cout << db.sql_pretty("SELECT role, count(*) FROM tensors GROUP BY role");
 ```
 
-C++ sarmalayıcısı hata durumunda `weightdb::Error` fırlatır. Tam örnek: `bindings/c/examples/example.cpp`.
+C++ sarmalayıcısı hata durumunda `weightlake::Error` fırlatır. Tam örnek: `bindings/c/examples/example.cpp`.
 
 ## JavaScript / TypeScript
 
 ```js
-const weightdb = require('weightdb');            // ya da require('./bindings/node')
+const weightlake = require('weightlake');            // ya da require('./bindings/node')
 
-const db = weightdb.open('repo', { create: true });
+const db = weightlake.open('repo', { create: true });
 db.importModel('gpt2', { message: 'base' });
 db.importModel('gpt2-ft', { branch: 'ft', base: 'main', message: 'ft' });
 
@@ -453,16 +453,16 @@ Bir repo **aynı anda tek bir process** tarafından açılmak üzere tasarlandı
 ## Depo yapısı
 
 ```
-crates/wdb-core      dtype'lar, ChunkHash, satır hizalı chunk'lama, istatistik, manifest/commit tipleri
-crates/wdb-store     pack dosyaları (mmap) + redb katalog, codec'ler (raw / zstd / xor-zstd), gc
-crates/wdb-version   log, yapısal ve sayısal diff, tensör istatistikleri
-crates/wdb-io        safetensors import/export, bellekten import, yan dosyalar
-crates/wdb-query     SQL motoru (DataFusion tablo sağlayıcıları + UDF'ler)
-crates/weightdb      genel Rust API: bütün binding'ler bu crate üzerine kurulu
-crates/wdb-cli       `wdb` komutu
-bindings/c           C ABI (cdylib/staticlib) + include/weightdb.h + include/weightdb.hpp
-bindings/python      PyO3 modülü `weightdb._native` + `weightdb` paketi (numpy/torch/pandas, `weightdb.hf`)
-bindings/node        napi-rs eklentisi + `weightdb` npm paketi (TypedArray, TypeScript tipleri)
+crates/wl-core      dtype'lar, ChunkHash, satır hizalı chunk'lama, istatistik, manifest/commit tipleri
+crates/wl-store     pack dosyaları (mmap) + redb katalog, codec'ler (raw / zstd / xor-zstd), gc
+crates/wl-version   log, yapısal ve sayısal diff, tensör istatistikleri
+crates/wl-io        safetensors import/export, bellekten import, yan dosyalar
+crates/wl-query     SQL motoru (DataFusion tablo sağlayıcıları + UDF'ler)
+crates/weightlake      genel Rust API: bütün binding'ler bu crate üzerine kurulu
+crates/wl-cli       `wlake` komutu
+bindings/c           C ABI (cdylib/staticlib) + include/weightlake.h + include/weightlake.hpp
+bindings/python      PyO3 modülü `weightlake._native` + `weightlake` paketi (numpy/torch/pandas, `weightlake.hf`)
+bindings/node        napi-rs eklentisi + `weightlake` npm paketi (TypedArray, TypeScript tipleri)
 scripts/             build-bindings.sh, gen-libnode.sh
 ```
 
@@ -473,13 +473,13 @@ Gereksinimler: Rust (stable, 2021 edition). Python binding'i için Python ≥ 3.
 ```sh
 cargo build --release --workspace     # thin LTO: release derleme birkaç dakika sürer
 scripts/build-bindings.sh             # derler ve çıktıları kopyalar:
-                                      #   bindings/python/weightdb/_native.{pyd,so}
-                                      #   bindings/node/weightdb.node
+                                      #   bindings/python/weightlake/_native.{pyd,so}
+                                      #   bindings/node/weightlake.node
                                       #   dist/c/{include,lib}
 ```
 
 **Python wheel:** `pip install maturin && maturin build -m bindings/python/Cargo.toml --release`
-İsteğe bağlı ekler: `torch`, `pandas`. `transformers` sadece `weightdb.hf` için gerekir.
+İsteğe bağlı ekler: `torch`, `pandas`. `transformers` sadece `weightlake.hf` için gerekir.
 
 **Windows notları.** Proje Windows'ta **GNU toolchain** (`stable-x86_64-pc-windows-gnu`) ve `PATH`'teki MinGW-w64 (WinLibs) ile geliştirildi:
 
@@ -498,7 +498,7 @@ Linux ve macOS henüz test edilmedi. Ancak kodda kütüphane dosya uzantıları 
 cargo test --workspace                                         # Rust birim + entegrasyon testleri
 
 # Python (numpy gerekir; ikinci argüman isteğe bağlı)
-python bindings/python/tests/test_weightdb.py <model_dizini> [<finetune_model_dizini>]
+python bindings/python/tests/test_weightlake.py <model_dizini> [<finetune_model_dizini>]
 
 # Hugging Face entegrasyonu (torch + transformers gerekir)
 python bindings/python/tests/test_hf.py <hf_model_dizini>
@@ -510,7 +510,7 @@ node bindings/node/test.js <model_dizini>
 #   bindings/c/examples/example.cpp dosyasını dist/c'ye karşı derleyip bir repo üzerinde çalıştır
 ```
 
-Python ve HF testleri, tensörlerin kaynak dosyalarla bit bit aynı olduğunu ve WeightDB'den yüklenen modellerin aynı logitleri ürettiğini kontrol eder.
+Python ve HF testleri, tensörlerin kaynak dosyalarla bit bit aynı olduğunu ve WeightLake'den yüklenen modellerin aynı logitleri ürettiğini kontrol eder.
 Ayrıca delta/tekilleştirme davranışını, diff'leri, export'un geri dönüşünü ve dtype uç durumlarını (BF16, big-endian, bitişik olmayan, boş, bool) da test ederler.
 
 ## Sınırlamalar
