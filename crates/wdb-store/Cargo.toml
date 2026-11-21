@@ -1,0 +1,20 @@
+[package]
+name = "wdb-store"
+description = "WeightDB storage engine: append-only pack files + redb catalog"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+wdb-core.workspace = true
+anyhow.workspace = true
+blake3.workspace = true
+memmap2.workspace = true
+postcard.workspace = true
+redb.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+zstd.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

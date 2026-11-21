@@ -1,0 +1,20 @@
+[package]
+name = "wdb-node"
+description = "WeightDB Node.js native addon (napi-rs)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wdb = { package = "weightdb", path = "../../crates/weightdb" }
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+napi = { version = "3", default-features = false, features = ["napi6"] }
+napi-derive = "3"
+
+[build-dependencies]
+napi-build = "2"

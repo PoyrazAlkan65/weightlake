@@ -1,0 +1,46 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/wdb-core",
+    "crates/wdb-store",
+    "crates/wdb-version",
+    "crates/wdb-io",
+    "crates/wdb-query",
+    "crates/weightdb",
+    "crates/wdb-cli",
+    "bindings/c",
+    "bindings/python",
+    "bindings/node",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+
+[workspace.dependencies]
+wdb-core = { path = "crates/wdb-core" }
+wdb-store = { path = "crates/wdb-store" }
+wdb-version = { path = "crates/wdb-version" }
+wdb-io = { path = "crates/wdb-io" }
+wdb-query = { path = "crates/wdb-query" }
+weightdb = { path = "crates/weightdb" }
+
+anyhow = "1"
+blake3 = "1"
+clap = { version = "4", features = ["derive"] }
+half = "2"
+memmap2 = "0.9"
+postcard = { version = "1", features = ["alloc"] }
+rayon = "1"
+redb = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tempfile = "3"
+zstd = "0.14"
+
+[profile.release]
+debug = false
+strip = true
+lto = "thin"
+codegen-units = 4

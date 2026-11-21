@@ -1,0 +1,3 @@
+# Windows + GNU toolchain: import library for N-API symbols (see scripts/gen-libnode.sh).
+[env]
+LIBNODE_PATH = { value = "bindings/node/libnode", relative = true }

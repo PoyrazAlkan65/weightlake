@@ -1,0 +1,9 @@
+target/
+*.pack
+catalog.redb
+dist/
+*.pyd
+*.node
+__pycache__/
+node_modules/
+bindings/node/libnode/

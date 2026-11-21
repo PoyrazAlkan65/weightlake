@@ -1,0 +1,20 @@
+[build-system]
+requires = ["maturin>=1.5,<2"]
+build-backend = "maturin"
+
+[project]
+name = "weightdb"
+description = "An embedded database for neural network weights"
+requires-python = ">=3.9"
+license = { text = "MIT OR Apache-2.0" }
+dependencies = ["numpy>=1.21"]
+dynamic = ["version"]
+
+[project.optional-dependencies]
+torch = ["torch>=2.1"]
+pandas = ["pandas"]
+
+[tool.maturin]
+module-name = "weightdb._native"
+python-source = "."
+features = ["pyo3/extension-module"]

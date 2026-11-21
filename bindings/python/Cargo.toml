@@ -1,0 +1,17 @@
+[package]
+name = "wdb-py"
+description = "WeightDB Python bindings (native module weightdb._native)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "_native"
+crate-type = ["cdylib"]
+
+[dependencies]
+wdb = { package = "weightdb", path = "../../crates/weightdb" }
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+pyo3 = { version = "0.30", features = ["extension-module", "abi3-py39", "generate-import-lib"] }

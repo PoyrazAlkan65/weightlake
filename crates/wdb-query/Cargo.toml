@@ -1,0 +1,15 @@
+[package]
+name = "wdb-query"
+description = "WeightDB SQL layer (Apache DataFusion): commits, refs, tensors, chunks tables + weight UDFs"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+wdb-core.workspace = true
+wdb-store.workspace = true
+wdb-io.workspace = true
+anyhow.workspace = true
+datafusion = { version = "55", default-features = false, features = ["sql"] }
+tokio = { version = "1", features = ["rt"] }
+serde_json.workspace = true

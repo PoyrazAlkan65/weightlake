@@ -1,0 +1,4 @@
+* text=auto eol=lf
+*.pyd binary
+*.node binary
+*.dll binary
